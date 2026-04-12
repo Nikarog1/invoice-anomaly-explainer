@@ -1,0 +1,34 @@
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Build & packaging 
+build/
+dist/
+*.egg-info/
+
+# Test & coverage 
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data & generated files
+data/
+*.parquet
+*.csv
+
+# NLP & ML artifacts
+*.model
+*.pkl
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
