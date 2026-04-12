@@ -18,10 +18,8 @@ dist/
 .coverage
 htmlcov/
 
-# Data & generated files
-data/
-*.parquet
-*.csv
+# Generated files
+# TO BE ADDED
 
 # NLP & ML artifacts
 *.model
