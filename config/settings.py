@@ -15,7 +15,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
-    ollama_base_url: str
+    ollama_base_url: str = "http://localhost:11434"
     model_name: str = "mistral"
     sqlite_path: Path = Path("./data/invoices.db")
     chromadb_path: Path = Path("./data/chroma")
