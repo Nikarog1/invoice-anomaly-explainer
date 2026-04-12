@@ -19,7 +19,9 @@ dist/
 htmlcov/
 
 # Generated files
-# TO BE ADDED
+*.db
+*.sqlite
+*.sqlite3
 
 # NLP & ML artifacts
 *.model
@@ -30,3 +32,12 @@ htmlcov/
 .idea/
 .DS_Store
 Thumbs.db
+
+# ChromaDB local storage
+chroma/
+
+# Ollama / LLM artifacts  
+*.gguf
+
+# Internal documentation
+docs/
