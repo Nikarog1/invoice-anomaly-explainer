@@ -18,7 +18,7 @@ class Invoice(SQLModel, table=True):
     invoice_metadata: dict = Field(default={}, sa_column=Column(JSON))  # country-specific fields like dic in CZ
     
 class InvoiceLineItem(SQLModel, table=True):
-    line_item_id: UUID = Field(default_factory=uuid4, primary_key=True)
+    invoice_line_item_id: UUID = Field(default_factory=uuid4, primary_key=True)
     invoice_id: UUID = Field(foreign_key="invoice.invoice_id")
     description: str
     quantity: float
@@ -26,5 +26,4 @@ class InvoiceLineItem(SQLModel, table=True):
     amount_net: float
     amount_gross: float
     vat_rate: float
-    product_service_id: UUID | None = None  # nullable, links to contract
     notes: str | None = None
