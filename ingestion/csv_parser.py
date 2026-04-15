@@ -47,11 +47,18 @@ class CSVParser:
                 sample = csvfile.read(256)
                 csvfile.seek(0)
                 
-                dialect = csv.Sniffer().sniff(sample)
+                try:
+                    dialect = csv.Sniffer().sniff(sample)
+                except:
+                    dialect = csv.excel # default csv dialect 
+                    
                 reader = csv.reader(csvfile, dialect)
 
                 for _ in range(5):
-                    next(reader)
+                    try:
+                        next(reader)
+                    except StopIteration:
+                        break
             return True
         except Exception:
             return False
