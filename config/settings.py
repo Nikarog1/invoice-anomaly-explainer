@@ -5,6 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 
+class InvoiceParseAndNormalizeSettings(BaseModel):
+    langs_string_search: list = ["EN", "CZ", "GR", "SP", "FR"]
+    invoice_fuzzy_match_min: float = 0.85
+    
 class ThresholdSettings(BaseModel):
     stats_deviation: float = 2.0
     fuzzy_match_min: float = 0.85
@@ -22,6 +26,7 @@ class Settings(BaseSettings):
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
     thresholds: ThresholdSettings = ThresholdSettings()
+    invoice_ingestion: InvoiceParseAndNormalizeSettings = InvoiceParseAndNormalizeSettings()
     
 settings = Settings() # fail fast approach
 
