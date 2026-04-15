@@ -30,3 +30,4 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 addopts = "-q"
 asyncio_mode = "auto" # no need to manually decorate each async test
+pythonpath = ["."]
