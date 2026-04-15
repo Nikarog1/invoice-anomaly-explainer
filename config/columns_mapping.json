@@ -1,0 +1,100 @@
+{
+    "invoice_number": [
+        "invoice number", "invoice no", "inv no",
+        "cislo faktury", "c. faktury",
+        "rechnungsnummer", "rechnungsnr",
+        "numero de factura", "n factura",
+        "numero de facture"
+    ],
+    "supplier_name": [
+        "supplier", "supplier name", "vendor",
+        "dodavatel", "nazev dodavatele",
+        "lieferant", "lieferantenname",
+        "proveedor", "nombre del proveedor",
+        "fournisseur", "nom du fournisseur"
+    ],
+    "buyer_name": [
+        "buyer", "customer", "client",
+        "odberatel", "zakaznik",
+        "kunde", "kaufer",
+        "cliente", "comprador",
+        "client", "acheteur"
+    ],
+    "issue_date": [
+        "issue date", "date of issue", "invoice date",
+        "datum vystaveni",
+        "ausstellungsdatum",
+        "fecha de emision",
+        "date d'emission"
+    ],
+    "due_date": [
+        "due date", "payment due",
+        "datum splatnosti",
+        "falligkeitsdatum",
+        "fecha de vencimiento",
+        "date d'echeance"
+    ],
+    "total_amount": [
+        "total", "total amount", "amount due",
+        "celkem", "celkova castka",
+        "gesamtbetrag", "summe",
+        "total", "importe total",
+        "total", "montant total"
+    ],
+    "currency": [
+        "currency",
+        "mena",
+        "wahrung",
+        "moneda",
+        "devise"
+    ],
+    "payment_details": [
+        "payment details", "bank details", "payment information",
+        "platebni udaje", "bankovni udaje",
+        "zahlungsdetails", "bankverbindung",
+        "detalles de pago", "informacion de pago",
+        "details de paiement", "coordonnees bancaires"
+    ],
+    "description": [
+        "description", "item description",
+        "popis",
+        "beschreibung",
+        "descripcion",
+        "description"
+    ],
+    "quantity": [
+        "quantity", "qty",
+        "mnozstvi",
+        "menge",
+        "cantidad",
+        "quantite"
+    ],
+    "unit_price": [
+        "unit price", "price per unit",
+        "cena za jednotku",
+        "stuckpreis", "einzelpreis",
+        "precio unitario",
+        "prix unitaire"
+    ],
+    "amount_net": [
+        "net amount", "subtotal",
+        "castka bez dph", "mezisoucet",
+        "nettobetrag",
+        "importe neto",
+        "montant net"
+    ],
+    "amount_gross": [
+        "gross amount", "total with tax",
+        "castka s dph",
+        "bruttobetrag",
+        "importe bruto",
+        "montant brut"
+    ],
+    "vat_rate": [
+        "vat", "vat rate", "tax rate",
+        "dph", "sazba dph",
+        "mwst", "mehrwertsteuer",
+        "iva", "tasa de iva",
+        "tva", "taux de tva"
+    ]
+}
