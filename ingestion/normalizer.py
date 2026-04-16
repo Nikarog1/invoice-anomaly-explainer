@@ -67,7 +67,7 @@ class Normalizer:
         
         mapped_row_invoice = {key: value for key, value in mapped_row.items() if key in invoice_cols}
         
-        return Invoice(**mapped_row_invoice)
+        return Invoice.model_validate(mapped_row_invoice)
 
         
     def _build_line_items(self, mapped_data: list[dict[str, Any]], invoice_id: UUID) -> list[InvoiceLineItem]:
@@ -88,7 +88,7 @@ class Normalizer:
             mapped_data_line_item = {key: value for key, value in data.items() if key in line_items_cols}
             mapped_data_line_item["invoice_id"] = invoice_id
 
-            results.append(InvoiceLineItem(**mapped_data_line_item))
+            results.append(InvoiceLineItem.model_validate(mapped_data_line_item))
             
         return results
 
