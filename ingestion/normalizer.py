@@ -43,6 +43,12 @@ class Normalizer:
         raw_columns = list(single_row.model_dump().keys())
         
         mapped_columns = self._map_columns(raw_columns, columns_mapping)
+        
+        # if not all(mapped_columns.values()): 
+        #     mapped_columns = self._fuzzy_match_columns()
+        #     if not all(mapped_columns.values()): 
+        #         mapped_columns= self._llm_match_columns()
+                
         mapped_data = self._apply_mapping(mapped_columns)
         
         invoice = self._build_invoice(mapped_data[0])
@@ -127,11 +133,11 @@ class Normalizer:
     @staticmethod
     def _map_columns(raw_columns: list, mapping: dict) -> dict[str, str]:
         """
-        Maps columns from RawInvoice to Pydantic models using columns_mapping.
+        Maps columns from RawInvoice to SQL models using columns_mapping.
         
         Args:
             raw_columns: columns from RawInvoice
-            mapping: columns_mapping
+            mapping: nested dict, columns_mapping.json
         
         Returns:
             Dict with cols from RawInvoice (key) mapped to desired output (values)
@@ -140,25 +146,43 @@ class Normalizer:
         raw_columns_lower = [col.lower() for col in raw_columns]
         
         for key, values in mapping.items():
+            possible_names = values.get("possible_names", [])
+            
             for raw_col in raw_columns_lower:
-                if raw_col in results and raw_col in values:
+                if raw_col in results and raw_col in possible_names:
                     raise ValueError(f"Column '{raw_col}' maps to both '{results[raw_col]}' and '{key}'")
-                if raw_col in values:
+                if raw_col in possible_names:
                     results[raw_col] = key
                     
         return results
     
+    # @staticmethod
+    # def _fuzzy_match_columns(
+    #     invoice_fuzzy_match_min: float,
+    #     raw_columns: list, 
+    #     mapping: dict, 
+    # ) -> dict[str, str]:
+        
+
+    # @staticmethod
+    # async def _llm_match_columns(
+    #     ollama_url: str,
+    #     model_name: str,
+    #     raw_columns: list, 
+    #     mapping: dict,
+    # ) -> dict[str, str]:
+    
     @staticmethod
-    def _read_columns_mapping_json(path: str|Path) -> dict[str, list]:
+    def _read_columns_mapping_json(path: str|Path) -> dict[str, dict]:
         """
         Loads columns_mapping for exact string comparison and mapping. 
-        From raw provided cols to defined in pydantic.
+        From raw provided cols to defined in SQL model.
         
         Args:
             path: path to columns_mapping
             
         Returns:
-            Dict with desired cols (keys) and possible variants from RawInvoice as lists (values)
+            Nested dict with desired cols (keys), info as dict about col (values)
         """
         path_converted = Path(path)
         
