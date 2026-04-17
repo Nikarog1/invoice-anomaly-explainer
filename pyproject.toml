@@ -9,6 +9,7 @@ dependencies = [
     "chromadb",
     "pydantic",
     "pydantic-settings",
+    "rapidfuzz",
     "fastapi[standard]",
     "uvicorn",
     "sqlmodel",
