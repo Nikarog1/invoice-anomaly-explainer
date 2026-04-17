@@ -83,6 +83,7 @@
         "description": "Human-readable description of the specific product or service being charged on this line item. Used for contract matching and anomaly detection. Every line item must have one.",
         "possible_names": [
             "description", "item description", "service description", "item",
+            "product desc", "item desc", "desc", "service desc",
             "popis", "nazev polozky",
             "beschreibung", "leistungsbeschreibung",
             "descripcion", "concepto",
