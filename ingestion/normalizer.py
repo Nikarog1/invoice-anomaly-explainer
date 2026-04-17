@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from rapidfuzz import fuzz
+
 from ingestion.models import RawInvoice
 from schemas.columns_mapping import ColumnMappingResult
 from schemas.invoice import Invoice, InvoiceLineItem
@@ -18,17 +20,21 @@ class Normalizer:
     
     Args:
         data: list of RawInvoice object from CSVParser
+        confidence_threshold: confidence threshold for mapping from config/settings.py
     """
     
-    def __init__(self, data: list[RawInvoice]) -> None:
+    def __init__(self, data: list[RawInvoice], confidence_threshold: float = 0.0) -> None:
         if len(data) == 0:
             raise ValueError("Provided data must contain at least 1 row!")
         self._data = data
+        self._confidence_threshold = confidence_threshold
         
+
     def normalize(self, path: str|Path) -> tuple[Invoice, list[InvoiceLineItem]]:
         """
         Runs full normalization pipeline.
-        Loads columns_mapping, maps raw columns to it, applies it to all raw data rows.
+        Loads columns_mapping, maps raw columns to it using exact -> fuzzy -> llm cascade. 
+        Applies it to all raw data rows.
         Then, creates Pydantic (SQLModel) objects - Invoice and list with InvoiceLineItem.
         
         Args:
@@ -43,16 +49,23 @@ class Normalizer:
         single_row = self._data[0]
         raw_columns = list(single_row.model_dump().keys())
         
-        mapped_columns = self._map_columns(raw_columns, columns_mapping)
+        mapping_exact = self._map_columns(raw_columns, columns_mapping)
         
-        # unresolved_schema_fields = list(set(columns_mapping.keys()) - set(mapped_columns.values()))
-        # unresolved_raw_fields = list(set(raw_columns) - set(mapped_columns.keys()))
-        # if not all(mapped_columns.values()): 
-        #     mapped_columns = self._fuzzy_match_columns()
-        #     if not all(mapped_columns.values()): 
-        #         mapped_columns= self._llm_match_columns()
-                
-        mapped_data = self._apply_mapping(mapped_columns)
+        resolved_exact = {r.raw_column: r.schema_field for r in mapping_exact if r.resolved}
+        unresolved_schema_fields = list(set(columns_mapping.keys()) - set(resolved_exact.values()))
+        unresolved_raw_fields = list(set(raw_columns) - set(resolved_exact.keys()))
+        
+        mapping_fuzzy = []
+        if unresolved_schema_fields or unresolved_raw_fields:
+            mapping_fuzzy = self._fuzzy_match_columns(
+                self._confidence_threshold,
+                columns_mapping,
+                unresolved_schema_fields,
+                unresolved_raw_fields 
+            )       
+        
+        mapping_combined = [r for r in mapping_exact if r.resolved] + mapping_fuzzy
+        mapped_data = self._apply_mapping(mapping_combined)
         
         invoice = self._build_invoice(mapped_data[0])
         invoice_id = invoice.invoice_id
@@ -119,7 +132,7 @@ class Normalizer:
             row_dict = {}
             
             for col, value in row.model_dump().items():
-                mapped_col = mapping.get(col)
+                mapped_col = mapping.get(col.lower())
                 
                 if mapped_col is None:
                     if "invoice_metadata" not in row_dict:
@@ -180,15 +193,70 @@ class Normalizer:
                     
         return results
     
-    # @staticmethod
-    # def _fuzzy_match_columns(
-    #     invoice_fuzzy_match_min: float,
-    #     mapping: dict,
-    #     unresolved_schema_fields: list,
-    #     unresolved_raw_fields: list,
-    # ) -> dict[str, str]:
+
+    @staticmethod
+    def _fuzzy_match_columns(
+        threshold: float,
+        mapping: dict,
+        unresolved_schema_fields: list,
+        unresolved_raw_fields: list,
+    ) -> list[ColumnMappingResult]:
+        """
+        Performs fuzzy match between raw_col and possible_names of schema_field using WRatio.
+        Compares only unresolved cases of raw_fields and unresolved schema_fields from previous step (exact search using _map_search())
         
+        Args:
+            threshold: threshold to accept fuzzy match, set in settings.py
+            mapping: nested dict, columns_mapping.json
+            unresolved_schema_fields: unresolved schema_fields (desired cols) from exact search
+            unresolved_raw_fields: unresolved raw_fields (inserted cols) from exact search
         
+        Returns:
+            List with ColumnMappingResult containing mapping and its metadata
+        """
+        
+        results = []
+        seen = set()
+        
+        for raw_col in unresolved_raw_fields:
+            best_score = 0
+            best_match = None
+            
+            for schema_col in unresolved_schema_fields:
+                possible_names = mapping.get(schema_col, {}).get("possible_names", [])
+    
+                for name in possible_names:
+                    score = fuzz.WRatio(raw_col, name) / 100 # original returns 0-100
+
+                    if score > best_score and schema_col not in seen:
+                        best_score = score
+                        best_match = schema_col
+                        
+            if best_score >= threshold:
+                seen.add(best_match)
+                results.append(
+                    ColumnMappingResult(
+                        raw_column=raw_col, 
+                        schema_field=best_match, 
+                        method="fuzzy", 
+                        resolved=True, 
+                        confidence=best_score
+                    )
+                )
+
+            else:
+                results.append(
+                    ColumnMappingResult(
+                        raw_column=raw_col, 
+                        schema_field=None, 
+                        method="fuzzy", 
+                        resolved=False, 
+                        confidence=None
+                    )
+                )
+        
+        return results
+      
 
     # @staticmethod
     # async def _llm_match_columns(
