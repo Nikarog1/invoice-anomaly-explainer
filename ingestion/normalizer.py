@@ -7,6 +7,7 @@ from typing import Any
 from uuid import UUID
 
 from ingestion.models import RawInvoice
+from schemas.columns_mapping import ColumnMappingResult
 from schemas.invoice import Invoice, InvoiceLineItem
 
 
@@ -44,6 +45,8 @@ class Normalizer:
         
         mapped_columns = self._map_columns(raw_columns, columns_mapping)
         
+        # unresolved_schema_fields = list(set(columns_mapping.keys()) - set(mapped_columns.values()))
+        # unresolved_raw_fields = list(set(raw_columns) - set(mapped_columns.keys()))
         # if not all(mapped_columns.values()): 
         #     mapped_columns = self._fuzzy_match_columns()
         #     if not all(mapped_columns.values()): 
@@ -99,7 +102,7 @@ class Normalizer:
         return results
 
 
-    def _apply_mapping(self, mapped_cols: dict[str, str]) -> list[dict[str, Any]]:
+    def _apply_mapping(self, mapped_cols: list[ColumnMappingResult]) -> list[dict[str, Any]]:
         """
         Applies mapping from _map_columns to all data.
         
@@ -110,12 +113,13 @@ class Normalizer:
             List of dicts with row data mapped to desired column names
         """
         results = []
+        mapping = {result.raw_column: result.schema_field for result in mapped_cols if result.resolved}
         
         for row in self._data:
             row_dict = {}
             
             for col, value in row.model_dump().items():
-                mapped_col = mapped_cols.get(col)
+                mapped_col = mapping.get(col)
                 
                 if mapped_col is None:
                     if "invoice_metadata" not in row_dict:
@@ -131,7 +135,7 @@ class Normalizer:
 
 
     @staticmethod
-    def _map_columns(raw_columns: list, mapping: dict) -> dict[str, str]:
+    def _map_columns(raw_columns: list, mapping: dict) -> list[ColumnMappingResult]:
         """
         Maps columns from RawInvoice to SQL models using columns_mapping.
         
@@ -140,28 +144,50 @@ class Normalizer:
             mapping: nested dict, columns_mapping.json
         
         Returns:
-            Dict with cols from RawInvoice (key) mapped to desired output (values)
+            List with ColumnMappingResult containing mapping and its metadata
         """
-        results = {}
+        results = []
         raw_columns_lower = [col.lower() for col in raw_columns]
-        
-        for key, values in mapping.items():
-            possible_names = values.get("possible_names", [])
+        seen = {}
             
-            for raw_col in raw_columns_lower:
-                if raw_col in results and raw_col in possible_names:
-                    raise ValueError(f"Column '{raw_col}' maps to both '{results[raw_col]}' and '{key}'")
+        for raw_col in raw_columns_lower:
+            
+            result = ColumnMappingResult(
+                raw_column=raw_col, 
+                schema_field=None, 
+                method="exact", 
+                resolved=False, 
+                confidence=None
+            )
+            
+            for key, values in mapping.items():
+                possible_names = values.get("possible_names", [])
+                
                 if raw_col in possible_names:
-                    results[raw_col] = key
+                    
+                    if raw_col in seen:
+                        raise ValueError(f"Schema field '{key}' already mapped to'{seen[key]}', cannot also match '{raw_col}'")
+                    seen[key] = raw_col
+                    result = ColumnMappingResult(
+                        raw_column=raw_col, 
+                        schema_field=key, 
+                        method="exact", 
+                        resolved=True, 
+                        confidence=None
+                    )
+                    break
+            results.append(result)
                     
         return results
     
     # @staticmethod
     # def _fuzzy_match_columns(
     #     invoice_fuzzy_match_min: float,
-    #     raw_columns: list, 
-    #     mapping: dict, 
+    #     mapping: dict,
+    #     unresolved_schema_fields: list,
+    #     unresolved_raw_fields: list,
     # ) -> dict[str, str]:
+        
         
 
     # @staticmethod
@@ -191,6 +217,7 @@ class Normalizer:
         
         with open(path_converted) as f:
             return json.load(f)
+
         
                     
             
