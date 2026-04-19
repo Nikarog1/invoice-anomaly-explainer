@@ -14,7 +14,7 @@ def test_normalizer_zero_input_returns_error() -> None:
         Normalizer(raw_input)
         
 
-def test_normalizer_exact_match_returns_expected_output() -> None:
+async def test_normalizer_exact_match_returns_expected_output() -> None:
     
     raw_input = [
         RawInvoice(**{
@@ -35,8 +35,8 @@ def test_normalizer_exact_match_returns_expected_output() -> None:
         }),   
     ]
     
-    normalizer = Normalizer(raw_input, confidence_threshold=1.1)
-    invoice, invoice_line_items = normalizer.normalize("./config/columns_mapping.json")
+    normalizer = Normalizer(raw_input, "./config/columns_mapping.json", confidence_threshold=1.1)
+    invoice, invoice_line_items = await normalizer.normalize()
     
     invoice_id = invoice.invoice_id
     assert isinstance(invoice_id, UUID)
@@ -55,7 +55,7 @@ def test_normalizer_exact_match_returns_expected_output() -> None:
     assert isinstance(invoice_line_items_0.invoice_line_item_id, UUID)
     
 
-def test_normalizer_fuzzy_match_returns_expected_output() -> None:
+async def test_normalizer_fuzzy_match_returns_expected_output() -> None:
 
     raw_input = [
         RawInvoice(**{
@@ -78,8 +78,8 @@ def test_normalizer_fuzzy_match_returns_expected_output() -> None:
         }),   
     ]
     
-    normalizer = Normalizer(raw_input, 0.7)
-    invoice, invoice_line_items = normalizer.normalize("./config/columns_mapping.json")
+    normalizer = Normalizer(raw_input, "./config/columns_mapping.json", 0.7)
+    invoice, invoice_line_items = await normalizer.normalize()
     
     invoice_id = invoice.invoice_id
     assert isinstance(invoice_id, UUID)
