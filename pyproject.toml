@@ -32,3 +32,6 @@ select = ["E", "F", "I"]
 addopts = "-q"
 asyncio_mode = "auto" # no need to manually decorate each async test
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:coroutine.*was never awaited:RuntimeWarning",
+]
