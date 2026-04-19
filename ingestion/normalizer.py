@@ -35,11 +35,13 @@ class Normalizer:
     def __init__(
             self, 
             data: list[RawInvoice], 
-            path: str | Path,
+            path: str | Path = "./config/columns_mapping.json",
             confidence_threshold: float = 0.8,
             ollama_url: str = "http://localhost:11434",
             model_name: str = "mistral",
         ) -> None:
+        
+        logger.debug(f"Normalizer initialized with threshold={confidence_threshold}, model={model_name}")
         
         if len(data) == 0:
             raise ValueError("Provided data must contain at least 1 row!")
@@ -62,6 +64,7 @@ class Normalizer:
             Tuple of pydantic objects - Invoice and list of InvoiceLineItem
         """
         
+        logger.info(f"Starting normalization, {len(self._data)} rows")
         single_row = self._data[0]
         raw_columns = list(single_row.model_dump().keys())
         
@@ -70,6 +73,7 @@ class Normalizer:
         resolved_fields = {r.raw_column: r.schema_field for r in mapping_exact if r.resolved}
         unresolved_schema_fields = list(set(self._columns_mapping.keys()) - set(resolved_fields.values()))
         unresolved_raw_fields = list(set(raw_columns) - set(resolved_fields.keys()))
+        logger.info(f"Exact match resolved {len(resolved_fields)}/{len(raw_columns)} columns")
         
         mapping_fuzzy = []
         mapping_llm = []
@@ -81,6 +85,7 @@ class Normalizer:
                 unresolved_schema_fields,
                 unresolved_raw_fields, 
             )
+            logger.info(f"Fuzzy match resolved {len([r for r in mapping_fuzzy if r.resolved])} additional columns")
             
             all_resolved = {r.raw_column: r.schema_field for r in mapping_exact + mapping_fuzzy if r.resolved}
             unresolved_schema_fields = list(set(self._columns_mapping.keys()) - set(all_resolved.values()))
@@ -96,9 +101,11 @@ class Normalizer:
                         unresolved_schema_fields,
                         unresolved_raw_fields,
                     )
+                    logger.warning(f"LLM match resolved {len([r for r in mapping_llm if r.resolved])} columns — review recommended")
                 except Exception as e:
                     logger.warning(f"Skipping LLM match, could not access Ollama: {e}")
         
+        logger.warning(f"Unresolved columns going to invoice_metadata: {unresolved_raw_fields}")
         mapping_combined = (
             [r for r in mapping_exact if r.resolved]
             + [r for r in mapping_fuzzy if r.resolved]
