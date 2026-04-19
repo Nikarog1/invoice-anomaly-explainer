@@ -46,7 +46,10 @@ class Normalizer:
         if len(data) == 0:
             raise ValueError("Provided data must contain at least 1 row!")
         
-        self._data = data
+        self._data = [
+            RawInvoice(**{k.lower(): v for k, v in row.model_dump().items()})
+            for row in data
+        ]
         self._columns_mapping = self._read_columns_mapping_json(path)
         self._confidence_threshold = confidence_threshold
         self._ollama_url = ollama_url
@@ -178,7 +181,7 @@ class Normalizer:
             row_dict = {}
             
             for col, value in row.model_dump().items():
-                mapped_col = mapping.get(col.lower())
+                mapped_col = mapping.get(col)
                 
                 if mapped_col is None:
                     if "invoice_metadata" not in row_dict:
