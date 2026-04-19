@@ -2,15 +2,21 @@ from __future__ import annotations
 
 import json
 
+from core.logging import get_logger
 from pathlib import Path
 from typing import Any
 from uuid import UUID
 
+from httpx import AsyncClient
+
 from rapidfuzz import fuzz
 
+from config.prompts import COLUMN_MAPPING_PROMPT
 from ingestion.models import RawInvoice
 from schemas.columns_mapping import ColumnMappingResult
 from schemas.invoice import Invoice, InvoiceLineItem
+
+logger = get_logger(__name__)
 
 
 
@@ -20,51 +26,84 @@ class Normalizer:
     
     Args:
         data: list of RawInvoice object from CSVParser
-        confidence_threshold: confidence threshold for mapping from config/settings.py
+        path: path to columns_mapping
+        confidence_threshold: confidence threshold for fuzzy match mapping from config/settings.py
+        ollama_url: ollama url of local model
+        model_name: model name performing validation
     """
     
-    def __init__(self, data: list[RawInvoice], confidence_threshold: float = 0.0) -> None:
+    def __init__(
+            self, 
+            data: list[RawInvoice], 
+            path: str | Path,
+            confidence_threshold: float = 0.8,
+            ollama_url: str = "http://localhost:11434",
+            model_name: str = "mistral",
+        ) -> None:
+        
         if len(data) == 0:
             raise ValueError("Provided data must contain at least 1 row!")
+        
         self._data = data
+        self._columns_mapping = self._read_columns_mapping_json(path)
         self._confidence_threshold = confidence_threshold
+        self._ollama_url = ollama_url
+        self._model_name = model_name
         
 
-    def normalize(self, path: str|Path) -> tuple[Invoice, list[InvoiceLineItem]]:
+    async def normalize(self) -> tuple[Invoice, list[InvoiceLineItem]]:
         """
         Runs full normalization pipeline.
         Loads columns_mapping, maps raw columns to it using exact -> fuzzy -> llm cascade. 
         Applies it to all raw data rows.
         Then, creates Pydantic (SQLModel) objects - Invoice and list with InvoiceLineItem.
         
-        Args:
-            path: path to columns_mapping
-        
         Returns:
             Tuple of pydantic objects - Invoice and list of InvoiceLineItem
         """
         
-        columns_mapping = self._read_columns_mapping_json(path)
-        
         single_row = self._data[0]
         raw_columns = list(single_row.model_dump().keys())
         
-        mapping_exact = self._map_columns(raw_columns, columns_mapping)
+        mapping_exact = self._map_columns(raw_columns, self._columns_mapping)
         
-        resolved_exact = {r.raw_column: r.schema_field for r in mapping_exact if r.resolved}
-        unresolved_schema_fields = list(set(columns_mapping.keys()) - set(resolved_exact.values()))
-        unresolved_raw_fields = list(set(raw_columns) - set(resolved_exact.keys()))
+        resolved_fields = {r.raw_column: r.schema_field for r in mapping_exact if r.resolved}
+        unresolved_schema_fields = list(set(self._columns_mapping.keys()) - set(resolved_fields.values()))
+        unresolved_raw_fields = list(set(raw_columns) - set(resolved_fields.keys()))
         
         mapping_fuzzy = []
+        mapping_llm = []
+        
         if unresolved_schema_fields or unresolved_raw_fields:
             mapping_fuzzy = self._fuzzy_match_columns(
                 self._confidence_threshold,
-                columns_mapping,
+                self._columns_mapping,
                 unresolved_schema_fields,
-                unresolved_raw_fields 
-            )       
+                unresolved_raw_fields, 
+            )
+            
+            all_resolved = {r.raw_column: r.schema_field for r in mapping_exact + mapping_fuzzy if r.resolved}
+            unresolved_schema_fields = list(set(self._columns_mapping.keys()) - set(all_resolved.values()))
+            unresolved_raw_fields = list(set(raw_columns) - set(all_resolved.keys()))
+            
+            if unresolved_schema_fields or unresolved_raw_fields:
+                try: 
+                    mapping_llm = await self._llm_match_columns(
+                        self._ollama_url,
+                        self._model_name,
+                        COLUMN_MAPPING_PROMPT,
+                        self._columns_mapping,
+                        unresolved_schema_fields,
+                        unresolved_raw_fields,
+                    )
+                except Exception as e:
+                    logger.warning(f"Skipping LLM match, could not access Ollama: {e}")
         
-        mapping_combined = [r for r in mapping_exact if r.resolved] + mapping_fuzzy
+        mapping_combined = (
+            [r for r in mapping_exact if r.resolved]
+            + [r for r in mapping_fuzzy if r.resolved]
+            + [r for r in mapping_llm if r.resolved]
+        )
         mapped_data = self._apply_mapping(mapping_combined)
         
         invoice = self._build_invoice(mapped_data[0])
@@ -203,7 +242,7 @@ class Normalizer:
     ) -> list[ColumnMappingResult]:
         """
         Performs fuzzy match between raw_col and possible_names of schema_field using WRatio.
-        Compares only unresolved cases of raw_fields and unresolved schema_fields from previous step (exact search using _map_search())
+        Compares only unresolved cases of raw_fields and unresolved schema_fields from previous step (exact search using _map_search()).
         
         Args:
             threshold: threshold to accept fuzzy match, set in settings.py
@@ -258,14 +297,85 @@ class Normalizer:
         return results
       
 
-    # @staticmethod
-    # async def _llm_match_columns(
-    #     ollama_url: str,
-    #     model_name: str,
-    #     raw_columns: list, 
-    #     mapping: dict,
-    # ) -> dict[str, str]:
+    @staticmethod
+    async def _llm_match_columns(
+        ollama_url: str,
+        model_name: str,
+        prompt: str,
+        mapping: dict,
+        unresolved_schema_fields: list,
+        unresolved_raw_fields: list,
+    ) -> list[ColumnMappingResult]:
+        """
+        Last instance of cascade to map unresolved cases.
+        Sends them with mapping and unassigned schema fields to LLM.
+        LLM responds with json with unresolved raw_cols assigned to unassigned schema_fields.
+        If it unsures where raw_col belongs to, it maps it to null.
+        NOTE: confidence score for llm match is always 0.6.
+        
+        Args:
+            ollama_url: ollama url of local model
+            model_name: model name performing validation
+            prompt: system prompt to map fields
+            mapping: nested dict, columns_mapping.json
+            unresolved_schema_fields: unresolved schema_fields (desired cols) from fuzzy match
+            unresolved_raw_fields: unresolved raw_fields (inserted cols) from fuzzy match
+        
+        Returns:
+            List with ColumnMappingResult containing mapping and its metadata
+        """
+        
+        # TODO: extract LLMClient when explanation agent is implemented
+        
+        mapping_unresolved_fields = {
+            key: value 
+            for key, value in mapping.items() 
+            if key in unresolved_schema_fields
+        }
+        prompt_formatted = prompt.format(
+            raw_column_names=unresolved_raw_fields,
+            mapping=mapping_unresolved_fields
+        )
+        
+        async with AsyncClient() as client:
+            request = client.build_request(
+                "POST", 
+                ollama_url, 
+                json={ 
+                    "model": model_name, 
+                    "format": "json", 
+                    "stream": False, 
+                    "messages": [
+                        {
+                            "role": "user", 
+                            "content": prompt_formatted
+                        }
+                    ] 
+                }
+            )
+            response = await client.send(request)
+            content = response.json()["message"]["content"]
+            response_dict = json.loads(content)
+        
+        results = []
+        for key, value in response_dict.items():
+            
+            if value and value not in unresolved_schema_fields: # hallucination check 
+                value = None 
+                
+            results.append(
+                ColumnMappingResult(
+                    raw_column=key,
+                    schema_field=value,
+                    method="llm",
+                    resolved=True if value else False,
+                    confidence=0.6 if value else None,
+                )
+            )
+        
+        return results        
     
+
     @staticmethod
     def _read_columns_mapping_json(path: str|Path) -> dict[str, dict]:
         """
@@ -285,8 +395,3 @@ class Normalizer:
         
         with open(path_converted) as f:
             return json.load(f)
-
-        
-                    
-            
-
