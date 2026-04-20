@@ -1,6 +1,7 @@
 from datetime import date
 from uuid import UUID, uuid4
 
+from pydantic import BaseModel
 from sqlmodel import Field, SQLModel 
 
 
@@ -25,3 +26,8 @@ class ContractLineItem(SQLModel, table=True):
     max_units: float
     units_kind: str
     notes: str | None = None
+    
+# Accumulator for pipeline state
+class ContractWithLineItems(BaseModel): 
+    contract: Contract
+    line_items: list[ContractLineItem]
