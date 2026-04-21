@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     )
     ollama_base_url: str = "http://localhost:11434"
     model_name: str = "mistral"
-    sqlite_path: Path = Path("./data/invoices.db")
+    sqlite_url: str = "sqlite:///./data/data.db"
     chromadb_path: Path = Path("./data/chroma")
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
