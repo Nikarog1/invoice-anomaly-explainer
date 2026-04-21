@@ -30,6 +30,22 @@ def load_invoice(state: PipelineState) -> dict:
         ]
     }
 
+def completeness_check_ingestion(state: PipelineState) -> dict:
+    logger.info("Running completeness_check_ingestion")
+    invoice_id = state["invoice_id"]
+    invoice = state["invoice"]
+    invoice_line_items = state["invoice_line_items"]
+    return {
+        "anomaly_flags": [AnomalyFlag(
+            anomaly_report_id=None, 
+            invoice_id=invoice_id, 
+            anomaly_name="Completness check at ingestion",
+            anomaly_severity=Severity.yellow,
+            anomaly_source=Source.completeness_check_ingestion,
+            )
+        ]
+    }
+
 def load_past_invoices(state: PipelineState) -> dict:
     logger.info("Running load_past_invoices")
     return {
@@ -44,7 +60,7 @@ def load_past_invoices(state: PipelineState) -> dict:
         )
     }
 
-def completeness_check(state: PipelineState) -> dict:
+def completeness_check_historical(state: PipelineState) -> dict:
     logger.info("Running completeness_check")
     invoice_id = state["invoice_id"]
     return {
@@ -53,7 +69,7 @@ def completeness_check(state: PipelineState) -> dict:
             invoice_id=invoice_id, 
             anomaly_name="Missing field",
             anomaly_severity=Severity.red,
-            anomaly_source=Source.completeness_check,
+            anomaly_source=Source.completeness_check_historical,
             )
         ]
     }
@@ -114,7 +130,7 @@ def explanation(state: PipelineState) -> dict:
     logger.info("Running explanation")
     invoice_id = state["invoice_id"]
     return {
-        "explanation": f"some explanation on invoice ID: {invoice_id}",
+        "agent_explanation": f"some explanation on invoice ID: {invoice_id}",
         "explanation_datetime": datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
     }
 
@@ -132,8 +148,9 @@ def check_contract_available(state: PipelineState) -> Literal["has_contract", "n
 
 builder = StateGraph(PipelineState)
 builder.add_node("load_invoice", load_invoice)
+builder.add_node("completeness_check_ingestion", completeness_check_ingestion)
 builder.add_node("load_past_invoices", load_past_invoices)
-builder.add_node("completeness_check", completeness_check)
+builder.add_node("completeness_check_historical", completeness_check_historical)
 builder.add_node("statistical_vs_history", statistical_vs_history)
 builder.add_node("load_contract", load_contract)
 builder.add_node("contract_matching", contract_matching)
@@ -142,13 +159,14 @@ builder.add_node("explanation", explanation)
 builder.add_node("delivery", delivery)
 
 builder.add_edge(START, "load_invoice")
-builder.add_edge("load_invoice", "load_past_invoices")
+builder.add_edge("load_invoice", "completeness_check_ingestion")
+builder.add_edge("completeness_check_ingestion", "load_past_invoices")
 builder.add_conditional_edges(
     "load_past_invoices", 
     check_historical_available, 
-    {"has_history": "completeness_check", "no_history": "load_contract"}
+    {"has_history": "completeness_check_historical", "no_history": "load_contract"}
 )
-builder.add_edge("completeness_check", "statistical_vs_history")
+builder.add_edge("completeness_check_historical", "statistical_vs_history")
 builder.add_edge("statistical_vs_history", "load_contract")
 builder.add_conditional_edges(
     "load_contract", 

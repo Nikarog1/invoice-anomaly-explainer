@@ -13,12 +13,13 @@ class Severity(str, Enum):
 class Source(str, Enum):
     statistical_vs_history = "statistical_vs_history"
     statistical_vs_contract = "statistical_vs_contract"
-    completeness_check = "completeness_check"
+    completeness_check_ingestion = "completeness_check_ingestion"
+    completeness_check_historical = "completeness_check_historical"
     contract_matching = "contract_matching"
     
 class AnomalyFlag(SQLModel, table=True):
     anomaly_flag_id: UUID = Field(default_factory=uuid4, primary_key=True)
-    anomaly_report_id: UUID = Field(foreign_key="anomalyreport.anomaly_report_id")
+    anomaly_report_id: UUID | None = Field(foreign_key="anomalyreport.anomaly_report_id")
     invoice_id: UUID = Field(foreign_key="invoice.invoice_id")
     anomaly_name: str
     anomaly_severity: Severity
