@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 
 def load_invoice(state: PipelineState) -> dict[str, Invoice | list[InvoiceLineItem]]:
+    logger.info("Running load_invoice")
     invoice_id = state["invoice_id"]
     return {
         "invoice": Invoice(invoice_id=invoice_id, invoice_number="123", supplier_name="suppl1", total_amount=990.0),
@@ -30,6 +31,7 @@ def load_invoice(state: PipelineState) -> dict[str, Invoice | list[InvoiceLineIt
     }
 
 def load_past_invoices(state: PipelineState) -> dict[str, HistoricalSummary]:
+    logger.info("Running load_past_invoices")
     return {
         "historical_summary": HistoricalSummary(
             supplier_name = "suppl1",
@@ -43,6 +45,7 @@ def load_past_invoices(state: PipelineState) -> dict[str, HistoricalSummary]:
     }
 
 def completeness_check(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+    logger.info("Running completeness_check")
     invoice_id = state["invoice_id"]
     return {
         "anomaly_flags": list[AnomalyFlag(
@@ -56,6 +59,7 @@ def completeness_check(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
     }
 
 def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+    logger.info("Running statistical_vs_history")
     invoice_id = state["invoice_id"]
     return {
         "anomaly_flags": list[AnomalyFlag(
@@ -69,6 +73,7 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
     }
 
 def load_contract(state: PipelineState) -> dict[str, ContractWithLineItems]:
+    logger.info("Running load_contract")
     contract_id = uuid4()
     return {
         "contracts": ContractWithLineItems(
@@ -81,6 +86,7 @@ def load_contract(state: PipelineState) -> dict[str, ContractWithLineItems]:
     }
 
 def contract_matching(state: PipelineState) -> dict[str, list[LineItemMatch]]:
+    logger.info("Running contract_matching")
     return {
         "line_item_matches": [
             LineItemMatch(contract_line_item_id=uuid4(), invoice_line_item_id=uuid4(), match_method=Method.exact, match_score=1.0),
@@ -89,6 +95,7 @@ def contract_matching(state: PipelineState) -> dict[str, list[LineItemMatch]]:
     }
 
 def statistical_vs_contract(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+    logger.info("Running statistical_vs_contract")
     invoice_id = state["invoice_id"]
     return {
         "anomaly_flags": list[AnomalyFlag(
@@ -102,6 +109,7 @@ def statistical_vs_contract(state: PipelineState) -> dict[str, list[AnomalyFlag]
     }
 
 def explanation(state: PipelineState) -> dict:
+    logger.info("Running explanation")
     invoice_id = state["invoice_id"]
     return {
         "explanation": f"some explanation on invoice ID: {invoice_id}",
@@ -109,6 +117,7 @@ def explanation(state: PipelineState) -> dict:
     }
 
 def delivery(state: PipelineState) -> dict:
+    logger.info("Running delivery")
     return {}
 
 def check_historical_available(state: PipelineState) -> Literal["has_history", "no_history"]:
