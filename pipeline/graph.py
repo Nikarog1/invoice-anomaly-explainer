@@ -19,7 +19,7 @@ logger = get_logger(__name__)
 
 
 
-def load_invoice(state: PipelineState) -> dict[str, Invoice | list[InvoiceLineItem]]:
+def load_invoice(state: PipelineState) -> dict:
     logger.info("Running load_invoice")
     invoice_id = state["invoice_id"]
     return {
@@ -30,7 +30,7 @@ def load_invoice(state: PipelineState) -> dict[str, Invoice | list[InvoiceLineIt
         ]
     }
 
-def load_past_invoices(state: PipelineState) -> dict[str, HistoricalSummary]:
+def load_past_invoices(state: PipelineState) -> dict:
     logger.info("Running load_past_invoices")
     return {
         "historical_summary": HistoricalSummary(
@@ -44,11 +44,11 @@ def load_past_invoices(state: PipelineState) -> dict[str, HistoricalSummary]:
         )
     }
 
-def completeness_check(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+def completeness_check(state: PipelineState) -> dict:
     logger.info("Running completeness_check")
     invoice_id = state["invoice_id"]
     return {
-        "anomaly_flags": list[AnomalyFlag(
+        "anomaly_flags": [AnomalyFlag(
             anomaly_report_id=None, 
             invoice_id=invoice_id, 
             anomaly_name="Missing field",
@@ -58,11 +58,11 @@ def completeness_check(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
         ]
     }
 
-def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+def statistical_vs_history(state: PipelineState) -> dict:
     logger.info("Running statistical_vs_history")
     invoice_id = state["invoice_id"]
     return {
-        "anomaly_flags": list[AnomalyFlag(
+        "anomaly_flags": [AnomalyFlag(
             anomaly_report_id=None, 
             invoice_id=invoice_id, 
             anomaly_name="Historical deviation found",
@@ -72,20 +72,22 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
         ]
     }
 
-def load_contract(state: PipelineState) -> dict[str, ContractWithLineItems]:
+def load_contract(state: PipelineState) -> dict:
     logger.info("Running load_contract")
     contract_id = uuid4()
     return {
-        "contracts": ContractWithLineItems(
-            contract = Contract(contract_id=contract_id, supplier_name="suppl1", buyer_name="our_company"),
-            line_items = [
-                ContractLineItem(contract_id=contract_id, product_service_name="smth1", unit_price=300),
-                ContractLineItem(contract_id=contract_id, product_service_name="smth2", unit_price=1400),
-            ]
-        )
+        "contracts": [
+                ContractWithLineItems(
+                contract = Contract(contract_id=contract_id, supplier_name="suppl1", buyer_name="our_company"),
+                line_items = [
+                    ContractLineItem(contract_id=contract_id, product_service_name="smth1", unit_price=300),
+                    ContractLineItem(contract_id=contract_id, product_service_name="smth2", unit_price=1400),
+                ]
+            )
+        ]
     }
 
-def contract_matching(state: PipelineState) -> dict[str, list[LineItemMatch]]:
+def contract_matching(state: PipelineState) -> dict:
     logger.info("Running contract_matching")
     return {
         "line_item_matches": [
@@ -94,11 +96,11 @@ def contract_matching(state: PipelineState) -> dict[str, list[LineItemMatch]]:
         ]
     }
 
-def statistical_vs_contract(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+def statistical_vs_contract(state: PipelineState) -> dict:
     logger.info("Running statistical_vs_contract")
     invoice_id = state["invoice_id"]
     return {
-        "anomaly_flags": list[AnomalyFlag(
+        "anomaly_flags": [AnomalyFlag(
             anomaly_report_id=None, 
             invoice_id=invoice_id, 
             anomaly_name="Contract deviation found",
@@ -121,10 +123,10 @@ def delivery(state: PipelineState) -> dict:
     return {}
 
 def check_historical_available(state: PipelineState) -> Literal["has_history", "no_history"]:
-    return "has_history" if state["historical_summary"] else "no_history"
+    return "has_history" if state["historical_summary"] is not None else "no_history"
     
 def check_contract_available(state: PipelineState) -> Literal["has_contract", "no_contract"]:
-    return "has_contract" if state["contracts"] else "no_contract"
+    return "has_contract" if state["contracts"] is not None else "no_contract"
 
 
 
