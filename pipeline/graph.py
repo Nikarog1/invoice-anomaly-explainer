@@ -111,17 +111,11 @@ def explanation(state: PipelineState) -> dict:
 def delivery(state: PipelineState) -> dict:
     return {}
 
-def check_historical_available(state: PipelineState) -> Literal["completeness_check", "load_contract"]:
-    if state["historical_summary"]:
-        return "completeness_check"
-    else:
-        return "load_contract"
+def check_historical_available(state: PipelineState) -> Literal["has_history", "no_history"]:
+    return "has_history" if state["historical_summary"] else "no_history"
     
-def check_contract_available(state: PipelineState) -> Literal["contract_matching", "explanation"]:
-    if state["contracts"]:
-        return "contract_matching"
-    else:
-        return "explanation"
+def check_contract_available(state: PipelineState) -> Literal["has_contract", "no_contract"]:
+    return "has_contract" if state["contracts"] else "no_contract"
 
 
 
@@ -138,10 +132,18 @@ builder.add_node("delivery", delivery)
 
 builder.add_edge(START, "load_invoice")
 builder.add_edge("load_invoice", "load_past_invoices")
-builder.add_conditional_edges("load_past_invoices", check_historical_available)
+builder.add_conditional_edges(
+    "load_past_invoices", 
+    check_historical_available, 
+    {"has_history": "completeness_check", "no_history": "load_contract"}
+)
 builder.add_edge("completeness_check", "statistical_vs_history")
 builder.add_edge("statistical_vs_history", "load_contract")
-builder.add_conditional_edges("load_contract", check_contract_available)
+builder.add_conditional_edges(
+    "load_contract", 
+    check_contract_available,
+    {"has_contract": "contract_matching", "no_contract": "explanation"}
+)
 builder.add_edge("contract_matching", "statistical_vs_contract")
 builder.add_edge("statistical_vs_contract", "explanation")
 builder.add_edge("explanation", "delivery")
