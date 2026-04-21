@@ -21,7 +21,7 @@ class CSVParser:
             raise FileNotFoundError(f"There is no file in provided path: {path}") 
         
         if not self._path.suffix.lower() == ".csv" or not self._is_csv(self._path):
-            raise InvalidCSVError(f"File must have csv format: {path}")
+            raise InvalidCSVError(path)
         
     def parse(self) -> list[RawInvoice]:
         results = []
