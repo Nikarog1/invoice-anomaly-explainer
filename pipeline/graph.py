@@ -7,28 +7,29 @@ from langgraph.graph import END, START, StateGraph
 from core.logging import get_logger
 
 from pipeline.state import PipelineState
+from pipeline.nodes.load_invoice import load_invoice
+from pipeline.nodes.delivery import delivery
 
 from schemas.anomaly import AnomalyFlag, Severity, Source
 from schemas.contract import Contract, ContractLineItem, ContractWithLineItems
 from schemas.history import HistoricalSummary, LineItemStats
 from schemas.junction import LineItemMatch
 from schemas.junction import Method
-from schemas.invoice import Invoice, InvoiceLineItem
 
 logger = get_logger(__name__)
 
 
 
-def load_invoice(state: PipelineState) -> dict:
-    logger.info("Running load_invoice")
-    invoice_id = state["invoice_id"]
-    return {
-        "invoice": Invoice(invoice_id=invoice_id, invoice_number="123", supplier_name="suppl1", total_amount=990.0),
-        "invoice_line_items": [
-            InvoiceLineItem(invoice_id=invoice_id, description="smth1", amount_gross=500.0),
-            InvoiceLineItem(invoice_id=invoice_id, description="smth2", amount_gross=490.0),
-        ]
-    }
+# def load_invoice(state: PipelineState) -> dict:
+#     logger.info("Running load_invoice")
+#     invoice_id = state["invoice_id"]
+#     return {
+#         "invoice": Invoice(invoice_id=invoice_id, invoice_number="123", supplier_name="suppl1", total_amount=990.0),
+#         "invoice_line_items": [
+#             InvoiceLineItem(invoice_id=invoice_id, description="smth1", amount_gross=500.0),
+#             InvoiceLineItem(invoice_id=invoice_id, description="smth2", amount_gross=490.0),
+#         ]
+#     }
 
 def completeness_check_ingestion(state: PipelineState) -> dict:
     logger.info("Running completeness_check_ingestion")
@@ -134,9 +135,9 @@ def explanation(state: PipelineState) -> dict:
         "explanation_datetime": datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
     }
 
-def delivery(state: PipelineState) -> dict:
-    logger.info("Running delivery")
-    return {}
+# def delivery(state: PipelineState) -> dict:
+#     logger.info("Running delivery")
+#     return {}
 
 def check_historical_available(state: PipelineState) -> Literal["has_history", "no_history"]:
     return "has_history" if state["historical_summary"] is not None else "no_history"
