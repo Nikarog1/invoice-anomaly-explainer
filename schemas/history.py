@@ -1,6 +1,12 @@
 from pydantic import BaseModel
+from enum import Enum
 
 
+
+class DegradationReason(str, Enum):
+    window_miss = "window_miss"
+    thin_count = "thin_count"
+    no_history = "no_history"
 
 class LineItemStats(BaseModel):
     description: str # same as description in InvoiceLineItem
@@ -13,3 +19,5 @@ class HistoricalSummary(BaseModel):
     invoice_count: int
     fields_seen: set[str]  # which fields have historically appeared
     line_item_stats: list[LineItemStats]
+    is_degraded: bool
+    degradation_reason: DegradationReason | None = None
