@@ -17,8 +17,9 @@ class PipelineState(TypedDict):
     invoice_line_items: list[InvoiceLineItem] | None
     historical_summary: HistoricalSummary | None
     contracts: list[ContractWithLineItems] | None 
-    line_item_matches: list[LineItemMatch] | None
+    line_item_matches: list[LineItemMatch]
     anomaly_flags: Annotated[list[AnomalyFlag], operator.add] # should accumulate different anomaly_flags, each flag has it's own model
     agent_explanation: str | None  # produced by explanation agent
     explanation_datetime: datetime | None
+    anomaly_report_id: UUID | None
     
