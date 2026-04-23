@@ -6,9 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class InvoiceParseAndNormalizeSettings(BaseModel):
-    langs_string_search: list = ["EN", "CZ", "GR", "SP", "FR"]
+    langs_string_search: list[str] = ["EN", "CZ", "GR", "SP", "FR"]
     invoice_fuzzy_match_min: float = 0.85
-    
+
+class SuppliersHistoricalInvoices(BaseModel):
+    default_history_window_months: int = 12
+    default_min_samples: int = 3     # 3 to 6 is the best interval
+
 class ThresholdSettings(BaseModel):
     stats_deviation: float = 2.0
     fuzzy_match_min: float = 0.85
@@ -27,6 +31,7 @@ class Settings(BaseSettings):
     fastapi_port: int = 8000
     thresholds: ThresholdSettings = ThresholdSettings()
     invoice_ingestion: InvoiceParseAndNormalizeSettings = InvoiceParseAndNormalizeSettings()
+    suppliers_config: SuppliersHistoricalInvoices = SuppliersHistoricalInvoices()
     
 settings = Settings() # fail fast approach
 
