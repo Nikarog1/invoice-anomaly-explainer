@@ -11,7 +11,7 @@ class DegradationReason(str, Enum):
 class LineItemStats(BaseModel):
     description: str # same as description in InvoiceLineItem
     mean_amount: float
-    stddev_amount: float
+    stddev_amount: float | None # None if num of cases < 2
     n_samples: int
 
 class HistoricalSummary(BaseModel):
