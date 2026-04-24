@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-from core.logging import get_logger
 from pathlib import Path
 from typing import Any
 from uuid import UUID
@@ -12,8 +11,11 @@ from httpx import AsyncClient
 from rapidfuzz import fuzz
 
 from config.prompts import COLUMN_MAPPING_PROMPT
-from ingestion.models import RawInvoice
-from schemas.columns_mapping import ColumnMappingResult
+from core.logging import get_logger
+
+from ingestion.models import IngestionResult, RawInvoice
+
+from schemas.columns_mapping import ColumnMapping, MappingMethod
 from schemas.invoice import Invoice, InvoiceLineItem
 
 logger = get_logger(__name__)
@@ -56,7 +58,7 @@ class Normalizer:
         self._model_name = model_name
         
 
-    async def normalize(self) -> tuple[Invoice, list[InvoiceLineItem]]:
+    async def normalize(self) -> IngestionResult:
         """
         Runs full normalization pipeline.
         Loads columns_mapping, maps raw columns to it using exact -> fuzzy -> llm cascade. 
@@ -64,7 +66,7 @@ class Normalizer:
         Then, creates Pydantic (SQLModel) objects - Invoice and list with InvoiceLineItem.
         
         Returns:
-            Tuple of pydantic objects - Invoice and list of InvoiceLineItem
+            IngestionResult PyDantic model holding invoice, invoice_line_items, and column_mapping_results
         """
         
         logger.info(f"Starting normalization, {len(self._data)} rows")
@@ -121,7 +123,11 @@ class Normalizer:
 
         invoice_line_items = self._build_line_items(mapped_data, invoice_id)
         
-        return (invoice, invoice_line_items)
+        return IngestionResult(
+            invoice=invoice, 
+            invoice_line_items=invoice_line_items, 
+            column_mapping_results=mapping_combined
+        )
     
     
     def _build_invoice(self, mapped_row: dict[str, Any]) -> Invoice:
@@ -164,7 +170,7 @@ class Normalizer:
         return results
 
 
-    def _apply_mapping(self, mapped_cols: list[ColumnMappingResult]) -> list[dict[str, Any]]:
+    def _apply_mapping(self, mapped_cols: list[ColumnMapping]) -> list[dict[str, Any]]:
         """
         Applies mapping from _map_columns to all data.
         
@@ -197,7 +203,7 @@ class Normalizer:
 
 
     @staticmethod
-    def _map_columns(raw_columns: list, mapping: dict) -> list[ColumnMappingResult]:
+    def _map_columns(raw_columns: list, mapping: dict) -> list[ColumnMapping]:
         """
         Maps columns from RawInvoice to SQL models using columns_mapping.
         
@@ -206,7 +212,7 @@ class Normalizer:
             mapping: nested dict, columns_mapping.json
         
         Returns:
-            List with ColumnMappingResult containing mapping and its metadata
+            List with ColumnMapping containing mapping and its metadata
         """
         results = []
         raw_columns_lower = [col.lower() for col in raw_columns]
@@ -214,10 +220,10 @@ class Normalizer:
             
         for raw_col in raw_columns_lower:
             
-            result = ColumnMappingResult(
+            result = ColumnMapping(
                 raw_column=raw_col, 
                 schema_field=None, 
-                method="exact", 
+                method=MappingMethod.exact, 
                 resolved=False, 
                 confidence=None
             )
@@ -230,10 +236,10 @@ class Normalizer:
                     if raw_col in seen:
                         raise ValueError(f"Schema field '{key}' already mapped to'{seen[key]}', cannot also match '{raw_col}'")
                     seen[key] = raw_col
-                    result = ColumnMappingResult(
+                    result = ColumnMapping(
                         raw_column=raw_col, 
                         schema_field=key, 
-                        method="exact", 
+                        method=MappingMethod.exact, 
                         resolved=True, 
                         confidence=None
                     )
@@ -249,7 +255,7 @@ class Normalizer:
         mapping: dict,
         unresolved_schema_fields: list,
         unresolved_raw_fields: list,
-    ) -> list[ColumnMappingResult]:
+    ) -> list[ColumnMapping]:
         """
         Performs fuzzy match between raw_col and possible_names of schema_field using WRatio.
         Compares only unresolved cases of raw_fields and unresolved schema_fields from previous step (exact search using _map_search()).
@@ -261,7 +267,7 @@ class Normalizer:
             unresolved_raw_fields: unresolved raw_fields (inserted cols) from exact search
         
         Returns:
-            List with ColumnMappingResult containing mapping and its metadata
+            List with ColumnMapping containing mapping and its metadata
         """
         
         results = []
@@ -284,10 +290,10 @@ class Normalizer:
             if best_score >= threshold:
                 seen.add(best_match)
                 results.append(
-                    ColumnMappingResult(
+                    ColumnMapping(
                         raw_column=raw_col, 
                         schema_field=best_match, 
-                        method="fuzzy", 
+                        method=MappingMethod.fuzzy, 
                         resolved=True, 
                         confidence=best_score
                     )
@@ -295,10 +301,10 @@ class Normalizer:
 
             else:
                 results.append(
-                    ColumnMappingResult(
+                    ColumnMapping(
                         raw_column=raw_col, 
                         schema_field=None, 
-                        method="fuzzy", 
+                        method=MappingMethod.fuzzy, 
                         resolved=False, 
                         confidence=None
                     )
@@ -315,7 +321,7 @@ class Normalizer:
         mapping: dict,
         unresolved_schema_fields: list,
         unresolved_raw_fields: list,
-    ) -> list[ColumnMappingResult]:
+    ) -> list[ColumnMapping]:
         """
         Last instance of cascade to map unresolved cases.
         Sends them with mapping and unassigned schema fields to LLM.
@@ -332,7 +338,7 @@ class Normalizer:
             unresolved_raw_fields: unresolved raw_fields (inserted cols) from fuzzy match
         
         Returns:
-            List with ColumnMappingResult containing mapping and its metadata
+            List with ColumnMapping containing mapping and its metadata
         """
         
         # TODO: extract LLMClient when explanation agent is implemented
@@ -374,10 +380,10 @@ class Normalizer:
                 value = None 
                 
             results.append(
-                ColumnMappingResult(
+                ColumnMapping(
                     raw_column=key,
                     schema_field=value,
-                    method="llm",
+                    method=MappingMethod.llm,
                     resolved=True if value else False,
                     confidence=0.6 if value else None,
                 )
