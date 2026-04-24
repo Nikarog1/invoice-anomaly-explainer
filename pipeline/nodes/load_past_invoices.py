@@ -59,6 +59,7 @@ def load_past_invoices(state: PipelineState) -> dict:
         ).first()
        
         if custom_config:
+            logger.debug("Custom supplier config identified")
             cutoff_date = custom_config.min_history_date
             min_samples = custom_config.min_samples if custom_config.min_samples is not None else settings.suppliers_config.default_min_samples
             
@@ -66,16 +67,18 @@ def load_past_invoices(state: PipelineState) -> dict:
             
             if issue_date is None:
                     raise InvoiceValueNotFoundError("issue_date")
-
+            
+            logger.debug("No custom supplier config identified, using default thresholds")
             cutoff_date = issue_date - relativedelta(months=settings.suppliers_config.default_history_window_months)
             min_samples = settings.suppliers_config.default_min_samples
-            
+               
         historical_invoices = session.exec(
             select(Invoice)
             .where(Invoice.invoice_id != invoice_id)
             .where(Invoice.supplier_name == supplier_name)
             .where(Invoice.buyer_name == buyer_name)
         ).all()
+        logger.debug(f"Found {len(historical_invoices)} historical invoices for {supplier_name}")
         
         
         if len(historical_invoices) > 0:
@@ -102,10 +105,8 @@ def load_past_invoices(state: PipelineState) -> dict:
                     
         else:
             is_degraded = True
-            degradation_reason = DegradationReason.no_history
-            
-            
-            
+            degradation_reason = DegradationReason.no_history    
+              
         historical_invoices_ids = [hist_inv.invoice_id for hist_inv in historical_invoices]
         historical_invoices_items = list(
             session.exec(
@@ -113,7 +114,7 @@ def load_past_invoices(state: PipelineState) -> dict:
                 .where(col(InvoiceLineItem.invoice_id).in_(historical_invoices_ids))
             ).all()
         )
-         
+             
     fields_seen = set()
     line_stats: dict[str, list[float]] = {}
     
@@ -128,7 +129,7 @@ def load_past_invoices(state: PipelineState) -> dict:
             
         else:
             line_stats[descr] = [amount]
-    
+     
     results_line_item = []       
     for line_item, amounts in line_stats.items():
         results_line_item.append(
@@ -140,7 +141,11 @@ def load_past_invoices(state: PipelineState) -> dict:
             )
         )
     
-    fields_seen.update(hist_inv.model_dump().keys() for hist_inv in historical_invoices)
+    fields_seen.update(
+        key
+        for hist_inv in historical_invoices
+        for key in hist_inv.model_dump().keys()
+    )
 
     historical_summary = HistoricalSummary(
         supplier_name=supplier_name,
@@ -150,7 +155,10 @@ def load_past_invoices(state: PipelineState) -> dict:
         is_degraded=is_degraded,
         degradation_reason=degradation_reason,
     )
-    
+    logger.info(
+        f"Historical summary: supplier={supplier_name}, count={len(historical_invoices)}, "
+        f"degraded={is_degraded}, reason={degradation_reason}"
+    )
     return {
         "historical_summary": historical_summary
     }
