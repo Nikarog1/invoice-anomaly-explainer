@@ -36,6 +36,7 @@ def _generate_ingestion_result() -> IngestionResult:
 
 def test_ingestion_repository_successful_save(fake_session) -> None:
     ingestion_result = _generate_ingestion_result()
+    invoice_id = ingestion_result.invoice.invoice_id
     IngestionRepository().save(ingestion_result)
     
     loaded_invoice = fake_session.exec(select(Invoice)).first()
@@ -43,7 +44,7 @@ def test_ingestion_repository_successful_save(fake_session) -> None:
     loaded_column_mapping = fake_session.exec(select(ColumnMappingResult)).all()
     
     assert loaded_invoice is not None
-    assert loaded_invoice.invoice_id == ingestion_result.invoice.invoice_id
+    assert loaded_invoice.invoice_id == invoice_id
     
     assert len(loaded_invoice_items) == 2
     assert len(loaded_column_mapping) == 6
