@@ -25,6 +25,20 @@ class InvoiceValueNotFoundError(Exception):
         self.field = field
         super().__init__(f"Invoice field {self.field} is None")
         
+class InvoiceMappingNotFoundError(Exception):
+    """Raised when column mapping for invoice_id is not found in database."""
+
+    def __init__(self, invoice_id: UUID) -> None:
+        self.invoice_id = invoice_id
+        super().__init__(f"Mapping for invoice id {invoice_id} not found in database.")
+        
+class IngestionRepositoryError(Exception):
+    """Raised when encountering error during save / load to db in ingestion phase"""
+
+    def __init__(self, invoice_id: UUID) -> None:
+        self.invoice_id = invoice_id
+        super().__init__(f"Failed to proceed invoice id {invoice_id}.")
+        
 class PipelineStateError(Exception):
     """Raised when pipeline state misses required input from previous node(s)."""
     
