@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from ingestion.normalizer import Normalizer
 from ingestion.models import RawInvoice
-from schemas.columns_mapping import ColumnMappingResult
+from schemas.columns_mapping import ColumnMapping, MappingMethod
 
 
 
@@ -38,7 +38,10 @@ async def test_normalizer_exact_match_returns_expected_output() -> None:
     ]
     
     normalizer = Normalizer(raw_input, "./config/columns_mapping.json", confidence_threshold=1.1)
-    invoice, invoice_line_items = await normalizer.normalize()
+    result = await normalizer.normalize()
+    
+    invoice = result.invoice
+    invoice_line_items = result.invoice_line_items
     
     invoice_id = invoice.invoice_id
     assert isinstance(invoice_id, UUID)
@@ -81,7 +84,10 @@ async def test_normalizer_fuzzy_match_returns_expected_output() -> None:
     ]
     
     normalizer = Normalizer(raw_input, "./config/columns_mapping.json", 0.7)
-    invoice, invoice_line_items = await normalizer.normalize()
+    result = await normalizer.normalize()
+    
+    invoice = result.invoice
+    invoice_line_items = result.invoice_line_items
     
     invoice_id = invoice.invoice_id
     assert isinstance(invoice_id, UUID)
@@ -125,52 +131,52 @@ async def test_normalizer_llm_match_returns_expected_output() -> None:
     ]
     
     llm_results = [
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="num invoice",
             schema_field="invoice_number",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="suppl",
             schema_field="supplier_name",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="total invoice",
             schema_field="total_amount",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="descr.",
             schema_field="description",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="amount gross",
             schema_field="amount_gross",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="rate vat %",
             schema_field="vat_rate",
-            method="llm",
+            method=MappingMethod.llm,
             resolved=True,
             confidence=0.6,
         ),
-        ColumnMappingResult(
+        ColumnMapping(
             raw_column="metadata_field",
             schema_field=None,
-            method="llm",
+            method=MappingMethod.llm,
             resolved=False,
             confidence=None,
         ),
@@ -183,7 +189,10 @@ async def test_normalizer_llm_match_returns_expected_output() -> None:
         "_llm_match_columns", 
         new=AsyncMock(return_value=llm_results)
     ):
-        invoice, invoice_line_items = await normalizer.normalize()
+        result = await normalizer.normalize()
+    
+    invoice = result.invoice
+    invoice_line_items = result.invoice_line_items
         
     assert len(invoice_line_items) == 2
     
