@@ -14,7 +14,7 @@ class MappingMethod(str, Enum):
     fuzzy = "fuzzy"
     llm = "llm"
   
-class ColumnMappingResult(BaseModel):
+class ColumnMapping(BaseModel):
     """In-memory class to store mapping results during normalization."""
     raw_column: str
     schema_field: str | None
@@ -34,7 +34,7 @@ class ColumnMappingResult(BaseModel):
         return self
 
 
-class ColumnMapping(SQLModel, table=True):
+class ColumnMappingResult(SQLModel, table=True):
     """SQLModel to store mapping results after normalization during ingestion of Invoice and InvoiceLineItems."""
     column_mapping_id: UUID = Field(default_factory=uuid4, primary_key=True)
     invoice_id: UUID = Field(foreign_key="invoice.invoice_id")
