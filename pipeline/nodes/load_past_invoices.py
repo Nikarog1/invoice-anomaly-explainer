@@ -146,11 +146,18 @@ def load_past_invoices(state: PipelineState) -> dict:
         for hist_inv in historical_invoices
         for key in hist_inv.model_dump().keys()
     )
+    
+    metadata_keys_seen = set(
+        key
+        for hist_inv in historical_invoices
+        for key in hist_inv.invoice_metadata.keys()
+    )
 
     historical_summary = HistoricalSummary(
         supplier_name=supplier_name,
         invoice_count=len(historical_invoices),
         fields_seen=fields_seen,
+        metadata_keys_seen=metadata_keys_seen,
         line_item_stats=results_line_item,
         is_degraded=is_degraded,
         degradation_reason=degradation_reason,
