@@ -55,3 +55,9 @@ class ColumnMappingResult(SQLModel, table=True):
             raise ValueError(f"Value conflict between schema_field {self.schema_field} and resolved {self.resolved}")
         return self
     
+
+class IngestionMappingNotes(BaseModel):
+    unresolved: list[ColumnMapping] = []
+    resolved_by_llm: list[ColumnMapping] = []
+    resolved_by_fuzzy: list[ColumnMapping] = []
+    
