@@ -17,7 +17,8 @@ class LineItemStats(BaseModel):
 class HistoricalSummary(BaseModel):
     supplier_name: str
     invoice_count: int
-    fields_seen: set[str]  # which fields have historically appeared
+    fields_seen: set[str]  # which fields have historically appeared; potentially will be redeveloped to allow thresholds of appearance
+    metadata_keys_seen: set[str] # which fields have historically appeared in invoice_metadata
     line_item_stats: list[LineItemStats]
     is_degraded: bool
     degradation_reason: DegradationReason | None = None
