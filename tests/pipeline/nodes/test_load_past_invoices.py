@@ -208,4 +208,49 @@ def test_load_past_invoices_invoice_None_raises_error(fake_session) -> None:
     } # type: ignore[typeddict-item]
 
     with pytest.raises(PipelineStateError):
-        load_past_invoices(state)   
+        load_past_invoices(state)  
+
+
+def test_load_past_invoices_metadata_keys_returned(fake_session) -> None:
+    state = _generate_state()
+    n_samples = 4
+    issue_date = date(2026, 3, 1)
+    _generate_history(fake_session, issue_date=issue_date, n_samples=n_samples)
+    
+    hist_invoice_metadata = Invoice(
+        invoice_number="hist_num4",
+        supplier_name="suppl1",
+        buyer_name="our_company",
+        total_amount=1000.0,
+        issue_date=issue_date,
+        invoice_metadata={
+            "Meta_field1": "123",
+            "Meta_field2": "0987",
+        }
+    )
+    
+    fake_session.add(hist_invoice_metadata)
+    fake_session.commit()
+    
+    output = load_past_invoices(state)
+    summary = output["historical_summary"]
+    
+    assert "Meta_field1" in summary.metadata_keys_seen
+    assert "Meta_field2" in summary.metadata_keys_seen
+    
+
+def test_load_past_invoices_metadata_keys_returns_empty_set(fake_session) -> None:
+    state = _generate_state()
+    n_samples = 4
+    issue_date = date(2026, 3, 1)
+    _generate_history(fake_session, issue_date=issue_date, n_samples=n_samples)
+    
+    output = load_past_invoices(state)
+    summary = output["historical_summary"]
+    
+    summary_meta_keys = summary.metadata_keys_seen
+    assert isinstance(summary_meta_keys, set)
+    assert len(summary_meta_keys) == 0
+    
+
+    
