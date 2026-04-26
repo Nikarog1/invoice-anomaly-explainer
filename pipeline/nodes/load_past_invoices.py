@@ -122,7 +122,7 @@ def load_past_invoices(state: PipelineState) -> dict:
         descr = line_item.description
         amount = line_item.amount_gross
         
-        fields_seen.update(line_item.model_dump().keys())
+        fields_seen.update(k for k, v in line_item.model_dump().items() if v is not None)
         
         if descr in line_stats:
             line_stats[descr].append(amount)
@@ -142,9 +142,10 @@ def load_past_invoices(state: PipelineState) -> dict:
         )
     
     fields_seen.update(
-        key
+        k
         for hist_inv in historical_invoices
-        for key in hist_inv.model_dump().keys()
+        for k, v in hist_inv.model_dump().items()
+        if v is not None
     )
     
     metadata_keys_seen = set(
