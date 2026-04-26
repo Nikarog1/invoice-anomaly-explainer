@@ -253,4 +253,30 @@ def test_load_past_invoices_metadata_keys_returns_empty_set(fake_session) -> Non
     assert len(summary_meta_keys) == 0
     
 
+def test_load_past_invoices_fields_seen_doesnt_take_None_fields(fake_session) -> None:
+    state = _generate_state()
+    n_samples = 4
+    issue_date = date(2026, 3, 1)
+    _generate_history(fake_session, issue_date=issue_date, n_samples=n_samples)
+    
+    hist_invoice_None = Invoice(
+        invoice_number="hist_num4",
+        supplier_name="suppl1",
+        buyer_name="our_company",
+        total_amount=1000.0,
+        issue_date=issue_date,
+        currency=None,
+        payment_details=None,
+    )
+    
+    fake_session.add(hist_invoice_None)
+    fake_session.commit()
+    
+    output = load_past_invoices(state)
+    summary = output["historical_summary"]
+    
+    assert "currency" not in summary.fields_seen
+    assert "payment_details" not in summary.fields_seen
+    
+
     
