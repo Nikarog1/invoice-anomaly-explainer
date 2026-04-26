@@ -22,3 +22,9 @@ class HistoricalSummary(BaseModel):
     line_item_stats: list[LineItemStats]
     is_degraded: bool
     degradation_reason: DegradationReason | None = None
+    
+class HistoricalCompletenessNotes(BaseModel):
+    missing_universal_fields: set[str]
+    new_universal_fields: set[str]
+    missing_metadata_keys: set[str]
+    new_metadata_keys: set[str]
