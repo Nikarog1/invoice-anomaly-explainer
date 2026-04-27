@@ -28,3 +28,16 @@ class HistoricalCompletenessNotes(BaseModel):
     new_universal_fields: set[str]
     missing_metadata_keys: set[str]
     new_metadata_keys: set[str]
+    
+class HistoricalStatsLine(BaseModel):
+    description: str
+    amount_gross: float
+    historical_mean: float
+    historical_stddev: float | None
+    z_score: float | None # (amount - mean) / stddev
+    
+class HistoricalStatsNotes(BaseModel):
+    anomalous_lines: list[HistoricalStatsLine]
+    
+class UnmatchedLineNotes(BaseModel):
+    unmatched_lines: set[str]
