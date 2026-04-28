@@ -26,16 +26,14 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
     
     logger.info("Running statistical_vs_history")
     invoice_id = state["invoice_id"]
-    invoice = state["invoice"]
     invoice_line_items = state["invoice_line_items"]
     historical_summary = state["historical_summary"]
     
     if (
-        invoice is None
-        or invoice_line_items is None
+        invoice_line_items is None
         or historical_summary is None
     ):
-        raise PipelineStateError("invoice, or/and invoice_line_items, or/and historical_summary")
+        raise PipelineStateError("invoice_line_items or/and historical_summary")
     
     line_item_stats = historical_summary.line_item_stats
     
