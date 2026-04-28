@@ -1,6 +1,7 @@
 from datetime import date
 from uuid import UUID, uuid4
 
+from enum import Enum
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel 
 
@@ -13,7 +14,7 @@ class Contract(SQLModel, table=True):
     currency: str | None = None
     payment_terms_days: int | None = None
     payment_details: str | None = None
-    signed_on: date | None = None
+    signed_on: date
     expires_on: date | None = None
     notes: str | None = None
     
@@ -31,3 +32,12 @@ class ContractLineItem(SQLModel, table=True):
 class ContractWithLineItems(BaseModel): 
     contract: Contract
     line_items: list[ContractLineItem]
+
+class DegradationReason(str, Enum):
+    no_contract = "no_contract"
+    issue_date_missing = "issue_date_missing"
+       
+class ContractSummary(BaseModel):
+    contracts: list[ContractWithLineItems]
+    is_degraded: bool
+    degradation_reason: DegradationReason | None
