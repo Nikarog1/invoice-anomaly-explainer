@@ -4,7 +4,7 @@ from typing import Annotated, TypedDict
 from uuid import UUID
 
 from schemas.anomaly import AnomalyFlag
-from schemas.contract import ContractWithLineItems
+from schemas.contract import ContractSummary
 from schemas.history import HistoricalSummary
 from schemas.junction import LineItemMatch
 from schemas.invoice import Invoice, InvoiceLineItem
@@ -16,7 +16,7 @@ class PipelineState(TypedDict):
     invoice: Invoice | None
     invoice_line_items: list[InvoiceLineItem] | None
     historical_summary: HistoricalSummary | None
-    contracts: list[ContractWithLineItems] | None 
+    contract_summary: ContractSummary | None 
     line_item_matches: list[LineItemMatch]
     anomaly_flags: Annotated[list[AnomalyFlag], operator.add] # should accumulate different anomaly_flags, each flag has it's own model
     agent_explanation: str | None  # produced by explanation agent
