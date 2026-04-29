@@ -16,6 +16,7 @@ class SuppliersHistoricalInvoices(BaseModel):
 class PipelineThresholdSettings(BaseModel):
     default_z_score_threshold: float = 3
     pipeline_fuzzy_match_min: float = 0.85
+    pipeline_vector_match_min: float = 0.85
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
