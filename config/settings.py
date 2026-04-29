@@ -13,11 +13,9 @@ class SuppliersHistoricalInvoices(BaseModel):
     default_history_window_months: int = 12
     default_min_samples: int = 3     # 3 to 6 is the best interval
 
-class ThresholdSettings(BaseModel):
-    stats_deviation: float = 2.0
-    fuzzy_match_min: float = 0.85
-    vector_sim_min: float = 0.80
+class PipelineThresholdSettings(BaseModel):
     default_z_score_threshold: float = 3
+    pipeline_fuzzy_match_min: float = 0.85
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -31,7 +29,7 @@ class Settings(BaseSettings):
     chromadb_path: Path = Path("./data/chroma")
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
-    thresholds: ThresholdSettings = ThresholdSettings()
+    thresholds: PipelineThresholdSettings = PipelineThresholdSettings()
     invoice_ingestion: InvoiceParseAndNormalizeSettings = InvoiceParseAndNormalizeSettings()
     suppliers_config: SuppliersHistoricalInvoices = SuppliersHistoricalInvoices()
     
