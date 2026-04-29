@@ -11,7 +11,8 @@ from pipeline.state import PipelineState
 
 from schemas.anomaly import AnomalyFlag
 from schemas.contract import Contract, ContractLineItem, ContractSummary, ContractWithLineItems, DegradationReason
-from schemas.junction import LineItemMatch
+from schemas.invoice import InvoiceLineItem
+from schemas.junction import LineItemMatch, Method
 
 logger = get_logger(__name__)
 
@@ -41,27 +42,47 @@ def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
          
     # unfilter already mapped items
     line_item_id_already_mapped = [item.invoice_line_item_id for item in line_item_match_already_mapped]
-    invoice_line_items_filtered = [item for item in invoice_line_items if item.invoice_line_item_id not in line_item_id_already_mapped]
+    invoice_line_items_filtered = [
+        item 
+        for item in invoice_line_items 
+        if item.invoice_line_item_id not in line_item_id_already_mapped
+    ]
     
-    # re transform contract lines - RETHINK LATER
-    contract_items_name_desc: dict[UUID, tuple] = dict()
-    for contract in contract_summary.contracts:
-        for item in contract.line_items:
-            contract_items_name_desc[item.contract_line_item_id] = (item.product_service_name, item.product_service_description)
-
-    # re transform invoice lines - RETHINK LATER      
-    invoice_items_name_desc: dict[UUID, str] = dict()
-    for invoice_item in invoice_line_items_filtered:
-        invoice_items_name_desc[invoice_item.invoice_line_item_id] = invoice_item.description
-        
-    # exact match - RETHINK LATER
+    contract_candidates: list[ContractLineItem] = [
+        item
+        for contract in contract_summary.contracts
+        for item in contract.line_items
+    ]
+    
     results = []
-    for i_line_id, i_line_desc in invoice_items_name_desc.items():
-        if i_line_desc in contract_items_name_desc.values(): # this one is wrong, comparing individual desc (str) to tuple
+    for inv_line in invoice_line_items_filtered:
+        matched = _exact_match(inv_line, contract_candidates)
+        
+        if matched:
             results.append(
                 LineItemMatch(
+                    contract_line_item_id=matched.contract_line_item_id, 
+                    invoice_line_item_id=inv_line.invoice_line_item_id,
+                    match_method=Method.exact,
+                    match_score=None # to be in line with normalizer approach
                 )
             )
+            
+
+def _exact_match(invoice_line_item: InvoiceLineItem, contract_line_items: list[ContractLineItem]) -> ContractLineItem | None:
+    """
+    Perform exact match on contract product / service name or description on invoice line item description.
+    """
+    contract = next(
+        (
+            contract_item 
+            for contract_item in contract_line_items
+            if contract_item.product_service_name == invoice_line_item.description
+        ),
+        None
+    )
+    return contract
+    
             
             
         
