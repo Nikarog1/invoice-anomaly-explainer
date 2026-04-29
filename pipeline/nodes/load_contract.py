@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 
-def load_contract(state: PipelineState) -> dict:
+def load_contract(state: PipelineState) -> dict[str, ContractSummary]:
     """
     Load contracts valid for invoice's supplier and issue date, paired with their line items.
 
