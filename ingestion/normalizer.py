@@ -38,7 +38,7 @@ class Normalizer:
             self, 
             data: list[RawInvoice], 
             path: str | Path = "./config/columns_mapping.json",
-            confidence_threshold: float = 0.8,
+            confidence_threshold: float = 0.85,
             ollama_url: str = "http://localhost:11434",
             model_name: str = "mistral",
         ) -> None:
@@ -241,7 +241,7 @@ class Normalizer:
                         schema_field=key, 
                         method=MappingMethod.exact, 
                         resolved=True, 
-                        confidence=None
+                        confidence=1.0
                     )
                     break
             results.append(result)
