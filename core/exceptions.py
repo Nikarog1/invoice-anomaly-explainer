@@ -39,6 +39,13 @@ class IngestionRepositoryError(Exception):
         self.invoice_id = invoice_id
         super().__init__(f"Failed to proceed invoice id {invoice_id}.")
         
+class PipelineRepositoryError(Exception):
+    """Raised when encountering error during save / load to db in pipeline phase"""
+
+    def __init__(self, invoice_id: UUID) -> None:
+        self.invoice_id = invoice_id
+        super().__init__(f"Failed to proceed invoice id {invoice_id}.")
+        
 class PipelineStateError(Exception):
     """Raised when pipeline state misses required input from previous node(s)."""
     
