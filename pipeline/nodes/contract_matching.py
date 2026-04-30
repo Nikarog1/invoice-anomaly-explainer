@@ -8,6 +8,7 @@ from core.exceptions import PipelineStateError
 from core.logging import get_logger
 
 from data.sqlite import get_session
+from data.vector_store import get_collection, query_similar
 
 from pipeline.state import PipelineState
 
@@ -34,10 +35,9 @@ def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
     ):
         raise PipelineStateError("invoice_line_items and/or contract_summary")
     
-    if contract_summary.is_degraded: # additional check, this one should be checked by conditional edge
+    if contract_summary.is_degraded:
         return {"anomaly_flags": []}
     
-    # below checks if some of invoice_line_item_id is already mapped
     with get_session() as session:
         line_item_match_already_mapped = session.exec(
             select(LineItemMatch)
@@ -47,7 +47,6 @@ def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
     if len(line_item_match_already_mapped) > 0:
         logger.info(f"{len(line_item_match_already_mapped)} items already mapped to contract")
          
-    # unfilter already mapped items
     line_item_id_already_mapped = [item.invoice_line_item_id for item in line_item_match_already_mapped]
     invoice_line_items_filtered = [
         item 
@@ -106,6 +105,10 @@ def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
                 )
             )
             continue
+        
+    return {
+        "anomaly_flags": []
+    }
             
 
 def _exact_match(invoice_line_item: InvoiceLineItem, contract_line_items: list[ContractLineItem]) -> ContractLineItem | None:
@@ -162,16 +165,22 @@ def _vector_match(
     """
     contract_ids = [str(c.contract_line_item_id) for c in contract_line_items]
     
-    result = collection.query(
-        query_texts=[invoice_line_item.description],
-        n_results=1,
-        where={
-            "supplier_name": supplier_name,
-            "contract_line_item_id": {"$in": contract_ids}
-        },
+    if not contract_ids:
+        return (None, 0.0)
+    
+    collection = get_collection()
+    result = query_similar(
+        collection,
+        invoice_line_item.description,
+        supplier_name,
+        contract_ids,
     )
     
-    if not result["ids"][0]:
+    if (
+        not result["ids"][0]
+        or result["distances"] is None
+        or not result["distances"][0]
+    ):
         return (None, 0.0)
     
     matched_id = result["ids"][0][0]
