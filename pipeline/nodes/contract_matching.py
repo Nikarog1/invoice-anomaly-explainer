@@ -57,8 +57,8 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
     
     if (
         invoice is None
-        or invoice_line_items is None or 
-        contract_summary is None
+        or invoice_line_items is None
+        or contract_summary is None
     ):
         raise PipelineStateError("invoice_line_items and/or contract_summary")
     
