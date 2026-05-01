@@ -1,5 +1,8 @@
 from uuid import UUID
 
+from chromadb.errors import ChromaError
+import httpx
+
 from rapidfuzz import fuzz
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,7 +20,7 @@ from data.vector_store import get_collection, query_similar
 
 from pipeline.state import PipelineState
 
-from schemas.anomaly import AnomalyFlag, Severity, Source
+from schemas.anomaly import AnomalyFlag, MatchedPair, NotExactMatchNotes, Severity, Source, UnresolvedMatchNotes
 from schemas.contract import ContractLineItem
 from schemas.invoice import InvoiceLineItem
 from schemas.junction import LineItemMatch, Method
@@ -27,6 +30,25 @@ logger = get_logger(__name__)
 
 
 async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]]:
+    """
+    Match invoice line items to contract line items via cascade.
+
+    Loads existing LineItemMatch rows from SQL and skips those line items.
+    Runs cascade on the rest: exact -> fuzzy -> vector -> LLM.
+    Each stage operates only on items unresolved by previous stages.
+
+    New matches written to LineItemMatch in this node (durable factual data).
+    Two AnomalyFlags possible:
+        - yellow not_exact_match: some matches required fuzzy/vector/LLM, need review.
+        - red unmatched_invoice_line_item: cascade exhausted without match.
+
+    Vector and LLM stages are skipped on Ollama/ChromaDB connectivity failure
+    without aborting the node.
+
+    Raises:
+        PipelineStateError: if invoice, invoice_line_items, or contract_summary missing.
+        PipelineRepositoryError: if SQL write fails.
+    """
     logger.info("Running contract_matching")
     
     invoice = state["invoice"]
@@ -82,8 +104,10 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
                 )
             )
             unresolved.remove(inv_line)
-
+    logger.info(f"Exact match resolved {len(results)}/{(len(results)+len(unresolved))} line items")
+    
     # FUZZY MATCH
+    fuzzy_resolved = []
     for inv_line in list(unresolved):
         matched_fuzzy, score = _fuzzy_match(inv_line, contract_candidates, settings.thresholds.pipeline_fuzzy_match_min)
         
@@ -96,46 +120,80 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
                     match_score=score
                 )
             )
+            fuzzy_resolved.append(
+                MatchedPair(
+                    invoice_description=inv_line.description,
+                    matched_contract_name=matched_fuzzy.product_service_name,
+                    score=score
+                )
+            )
             unresolved.remove(inv_line)
+    logger.info(f"Fuzzy match resolved {len([r for r in results if r.match_method == Method.fuzzy])} additional line items")
     
     # VECTOR SEARCH
-    matched_vector = _vector_match(
-        unresolved, 
-        contract_candidates,
-        invoice.supplier_name,
-        settings.thresholds.pipeline_vector_match_min,
-    )
-    
-    for inv_line_id, (contract_line, score) in matched_vector.items():
-        if contract_line:
-            results.append(
-                LineItemMatch(
-                    contract_line_item_id=contract_line.contract_line_item_id, 
-                    invoice_line_item_id=inv_line_id,
-                    match_method=Method.vector,
-                    match_score=score
+    vector_resolved = []
+    try:
+        matched_vector = _vector_match(
+            unresolved, 
+            contract_candidates,
+            invoice.supplier_name,
+            settings.thresholds.pipeline_vector_match_min,
+        )
+        
+        for inv_line_id, (contract_line, score) in matched_vector.items():
+            if contract_line:
+                results.append(
+                    LineItemMatch(
+                        contract_line_item_id=contract_line.contract_line_item_id, 
+                        invoice_line_item_id=inv_line_id,
+                        match_method=Method.vector,
+                        match_score=score
+                    )
                 )
-            )
-            inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
-            unresolved.remove(inv_line)
-
-    # LLM MATCH    
-    matched_llm = await _llm_match(unresolved, contract_candidates)
-    
-    for inv_line_desc, mapping in matched_llm.items():
-        if mapping:
-            contract = next(c for c in contract_candidates if c.product_service_name == mapping)
-            inv_line = next(inv_line for inv_line in unresolved if inv_line.description == inv_line_desc)
-            
-            results.append(
-                LineItemMatch(
-                    contract_line_item_id=contract.contract_line_item_id, 
-                    invoice_line_item_id=inv_line.invoice_line_item_id,
-                    match_method=Method.llm,
-                    match_score=0.6
+                inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
+                vector_resolved.append(
+                    MatchedPair(
+                        invoice_description=inv_line.description,
+                        matched_contract_name=contract_line.product_service_name,
+                        score=score
+                    )
                 )
-            )
-            unresolved.remove(inv_line)
+                unresolved.remove(inv_line)
+        logger.info(f"Vector search resolved {len([r for r in results if r.match_method == Method.vector])} additional line items")
+    except (ChromaError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+        logger.warning(f"Skipping vector search, infrastructure unavailable: {e}")
+    
+    # LLM MATCH
+    llm_resolved = []
+    try:
+        matched_llm = await _llm_match(unresolved, contract_candidates)
+        
+        for inv_line_desc, mapping in matched_llm.items():
+            if mapping:
+                contract = next(c for c in contract_candidates if c.product_service_name == mapping)
+                inv_line = next(inv_line for inv_line in unresolved if inv_line.description == inv_line_desc)
+                
+                results.append(
+                    LineItemMatch(
+                        contract_line_item_id=contract.contract_line_item_id, 
+                        invoice_line_item_id=inv_line.invoice_line_item_id,
+                        match_method=Method.llm,
+                        match_score=0.6
+                    )
+                )
+                llm_resolved.append(
+                    MatchedPair(
+                        invoice_description=inv_line.description,
+                        matched_contract_name=contract.product_service_name,
+                        score=0.6
+                    )
+                )
+                unresolved.remove(inv_line)
+        logger.info(f"LLM match resolved {len([r for r in results if r.match_method == Method.llm])} additional line items")
+        
+    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+        logger.warning(f"Skipping LLM match, Ollama unavailable: {e}")
+        
             
     # DB WRITE
     if results:
@@ -149,22 +207,37 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
     # ANOMALY FLAGS
     flags = []
     
-    if results:
-        non_exact = [line_match for line_match in results if line_match.match_method != Method.exact]
-        
-        if non_exact:
-            flag_yellow = AnomalyFlag(
-                anomaly_report_id=None,
-                invoice_id=invoice.invoice_id,
-                anomaly_name="not_exact_match",
-                anomaly_severity=Severity.yellow,
-                anomaly_source=Source.contract_matching,
-                anomaly_deviation=None,
-                anomaly_notes=None # don't comment it, I add pydantic model for that after check
-            )
-            flags.append(flag_yellow)
+    if (results
+        and (
+           fuzzy_resolved
+           or vector_resolved
+           or llm_resolved 
+        )
+    ):
+            
+        notes_yellow = NotExactMatchNotes(
+            fuzzy_resolved=fuzzy_resolved,
+            vector_resolved=vector_resolved,
+            llm_resolved=llm_resolved,
+        )
+        flag_yellow = AnomalyFlag(
+            anomaly_report_id=None,
+            invoice_id=invoice.invoice_id,
+            anomaly_name="not_exact_match",
+            anomaly_severity=Severity.yellow,
+            anomaly_source=Source.contract_matching,
+            anomaly_deviation=None,
+            anomaly_notes=notes_yellow.model_dump_json(),
+        )
+        flags.append(flag_yellow)
+        logger.info(
+            f"Yellow flag: {len(notes_yellow.fuzzy_resolved)+len(notes_yellow.vector_resolved)+len(notes_yellow.llm_resolved)} "
+            f"non-exact matches (fuzzy={len(notes_yellow.fuzzy_resolved)}, "
+            f"vector={len(notes_yellow.vector_resolved)}, llm={len(notes_yellow.llm_resolved)})"
+        )
             
     if unresolved:
+        notes_red = UnresolvedMatchNotes(unresolved_invoice_line_items=[u.description for u in unresolved])
         flag_red = AnomalyFlag(
             anomaly_report_id=None,
             invoice_id=invoice.invoice_id,
@@ -172,9 +245,16 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
             anomaly_severity=Severity.red,
             anomaly_source=Source.contract_matching,
             anomaly_deviation=None,
-            anomaly_notes=None # don't comment it, I add pydantic model for that after check
+            anomaly_notes=notes_red.model_dump_json(),
         )
-        flags.append(flag_red) 
+        flags.append(flag_red)
+        logger.info(
+            f"Red anomaly flag raised! "
+            f"unresolved invoice line items={len(notes_red.unresolved_invoice_line_items)}"
+        )
+        
+    if not flags:
+        logger.info("No anomaly flag raised")
         
     return {
         "anomaly_flags": flags
@@ -184,7 +264,15 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
 
 def _exact_match(invoice_line_item: InvoiceLineItem, contract_line_items: list[ContractLineItem]) -> ContractLineItem | None:
     """
-    Perform exact match of contract product / service name on invoice line item description.
+    Compare invoice description to contract product_service_name with raw equality.
+    Returns the first matching ContractLineItem, or None.
+    
+    Args:
+        invoice_line_item: InvoiceLineItem object
+        contract_line_items: list of ContractLineItem objects
+    
+    Returns:
+        ContractLineItem or None
     """
     contract = next(
         (
@@ -205,9 +293,20 @@ def _fuzzy_match(
         
     ) -> tuple[ContractLineItem | None, float]:
     """
-    Perform fuzzy match of contract product / service name on invoice line item description.
-    Search for best confidence score iterating over all contract line items.
-    If several contract names have same score, first one occured is returned.
+    Find best fuzzy match for invoice description across contract line items.
+
+    Uses rapidfuzz token_set_ratio (handles word reordering and extra/missing tokens).
+    Returns the best-scoring contract item if score >= threshold, else (None, 0.0).
+    Ties broken by first-seen order.
+    
+    Args:
+        invoice_line_item: InvoiceLineItem object
+        contract_line_items: list of ContractLineItem objects
+        supplier_name: supplier name from invoice / contracts
+        confidence_threshold: threshold from settings to accept fuzzy search result
+    
+    Returns:
+        tuple with ContractLineItem or None, and similarity score
     """
     best_score = 0.0
     best_contract_item = None
@@ -234,7 +333,21 @@ def _vector_match(
         confidence_threshold: float = settings.thresholds.pipeline_vector_match_min,
     ) -> dict[UUID, tuple[ContractLineItem | None, float]]:
     """
-    Perform vector match of contract product / service name on invoice line item description.
+    Find top-1 semantic match for each invoice description via ChromaDB.
+
+    Single batched query to the vector collection, scoped to the supplier's contract
+    line items. Distances converted to similarity (1 - cosine_distance).
+    Returns mapping invoice_line_item_id -> (contract_item or None, score).
+    Items below threshold mapped to (None, 0.0).
+    
+    Args:
+        invoice_line_items: list of InvoiceLineItem objects
+        contract_line_items: list of ContractLineItem objects
+        supplier_name: supplier name from invoice / contracts
+        confidence_threshold: threshold from settings to accept vector search result
+    
+    Returns:
+        dict with invoice line item id (key) and tuple (value) with ContractLineItem or None, and similarity score
     """
     results: dict[UUID, tuple[ContractLineItem | None, float]] = dict()
     contract_ids = [str(c.contract_line_item_id) for c in contract_line_items]
@@ -286,19 +399,21 @@ def _vector_match(
 
 
 async def _llm_match(
-        invoice_line_item: list[InvoiceLineItem], 
+        invoice_line_items: list[InvoiceLineItem], 
         contract_line_items: list[ContractLineItem],
         prompt: str = CONTRACT_MATCHING_PROMPT,
     ) -> dict[str, str | None]:
     """
-    Last instance of cascade to map unresolved cases.
-    Sends them contract line items names to LLM.
-    LLM responds with json with invoice line item description assigned to contract line item name.
-    If it unsures where line item description belongs to, it maps it to null.
-    NOTE: confidence score for llm match is always 0.6.
+    Send unresolved invoice descriptions and contract names to local LLM.
+
+    LLM returns a JSON dict mapping each description to a contract name or null.
+    Hallucinated names (not in contract list) and unknown keys (not in input)
+    are filtered out. Confidence fixed at 0.6 for any successful LLM match.
+
+    Returns dict description -> matched_name. Empty dict on no matches.
     
     Args:
-        invoice_line_item: InvoiceLineItem object
+        invoice_line_items: list of InvoiceLineItem objects
         contract_line_items: list of ContractLineItem objects
         ollama_url: ollama url of local model
         model_name: model name performing validation
@@ -309,10 +424,10 @@ async def _llm_match(
     """
     
     contract_names = [item.product_service_name for item in contract_line_items]
-    inv_line_descriptions = [item.description for item in invoice_line_item]
+    inv_line_descriptions = [item.description for item in invoice_line_items]
     
     prompt_formatted = prompt.format(
-        invoice_line_item_description=[item.description for item in invoice_line_item],
+        invoice_line_item_descriptions=[item.description for item in invoice_line_items],
         product_service_names=contract_names
     )
     
