@@ -74,7 +74,7 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
             anomaly_name="line_amount_deviation",
             anomaly_severity=Severity.yellow if historical_summary.is_degraded else Severity.red,
             anomaly_source=Source.statistical_vs_history,
-            anomaly_deviation=None, # at the end, probably this argument is not useful if I aggregate everything in notes
+            anomaly_deviation=None,
             anomaly_notes=notes_stats.model_dump_json(),
         )
         flags.append(flag_statistical)
@@ -87,7 +87,7 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
             anomaly_name="unmatched_line_item",
             anomaly_severity=Severity.yellow,
             anomaly_source=Source.statistical_vs_history,
-            anomaly_deviation=None, # at the end, probably this argument is not useful if I aggregate everything in notes
+            anomaly_deviation=None,
             anomaly_notes=notes_unmatched.model_dump_json(),
         )
         flags.append(flag_unmatched)
