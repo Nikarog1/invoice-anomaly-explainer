@@ -58,19 +58,20 @@ def add_contract_line_items(
         
 def query_similar(
         collection: chromadb.Collection,
-        invoice_line_description: str, 
+        invoice_line_descriptions: list[str], 
         supplier_name: str, 
         contract_line_item_ids: list[str], 
         n_results: int = 1
     ) -> chromadb.QueryResult:
     """
-    Find top-n contract line items semantically closest to invoice line description.
+    Find top-n contract line items semantically closest to invoice lines descriptions.
+    Process list of invoice lines descriptions at once.
     
     Filters by supplier_name and restricts results to provided contract_line_item_ids,
     so search stays within contracts in scope for the current invoice.
     """
     return collection.query(
-        query_texts=[invoice_line_description],
+        query_texts=invoice_line_descriptions,
         include=["metadatas", "documents", "distances"],
         n_results=n_results,
         ids=contract_line_item_ids,
