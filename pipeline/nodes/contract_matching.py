@@ -12,7 +12,7 @@ from config.prompts import CONTRACT_MATCHING_PROMPT
 from config.settings import settings
 
 from core.exceptions import PipelineRepositoryError, PipelineStateError
-from core.llm_client import call_local_llm
+from data.llm_client import call_local_llm
 from core.logging import get_logger
 
 from data.sqlite import get_session
