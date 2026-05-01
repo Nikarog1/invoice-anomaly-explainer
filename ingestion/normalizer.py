@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from httpx import AsyncClient
-
 from rapidfuzz import fuzz
 
 from config.prompts import COLUMN_MAPPING_PROMPT
 from core.logging import get_logger
+
+from data.llm_client import call_local_llm
 
 from ingestion.models import IngestionResult, RawInvoice
 
@@ -341,8 +341,6 @@ class Normalizer:
             List with ColumnMapping containing mapping and its metadata
         """
         
-        # TODO: extract LLMClient when explanation agent is implemented
-        
         mapping_unresolved_fields = {
             key: value 
             for key, value in mapping.items() 
@@ -353,25 +351,10 @@ class Normalizer:
             mapping=mapping_unresolved_fields
         )
         
-        async with AsyncClient() as client:
-            request = client.build_request(
-                "POST", 
-                ollama_url, 
-                json={ 
-                    "model": model_name, 
-                    "format": "json", 
-                    "stream": False, 
-                    "messages": [
-                        {
-                            "role": "user", 
-                            "content": prompt_formatted
-                        }
-                    ] 
-                }
-            )
-            response = await client.send(request)
-            content = response.json()["message"]["content"]
-            response_dict = json.loads(content)
+        response_dict = await call_local_llm(prompt_formatted, expect_json=True)
+        
+        if not isinstance(response_dict, dict):
+            raise ValueError("LLM return is not in dict format!")
         
         results = []
         for key, value in response_dict.items():
