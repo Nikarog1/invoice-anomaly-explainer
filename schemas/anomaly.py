@@ -1,8 +1,12 @@
 from datetime import datetime
-from enum import Enum
 from uuid import UUID, uuid4
 
+from enum import Enum
+from pydantic import BaseModel
 from sqlmodel import Field, SQLModel 
+
+from schemas.invoice import InvoiceLineItem
+from schemas.junction import LineItemMatch
 
 
 
@@ -33,3 +37,17 @@ class AnomalyReport(SQLModel, table=True):
     anomalies_count: int
     agent_explanation: str | None = None
     explanation_date: datetime | None = None
+    
+    
+class MatchedPair(BaseModel):
+    invoice_description: str
+    matched_contract_name: str
+    score: float
+
+class NotExactMatchNotes(BaseModel):
+    fuzzy_resolved: list[MatchedPair]
+    vector_resolved: list[MatchedPair]
+    llm_resolved: list[MatchedPair]
+    
+class UnresolvedMatchNotes(BaseModel):
+    unresolved_invoice_line_items: list[str]
