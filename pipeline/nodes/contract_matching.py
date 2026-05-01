@@ -128,7 +128,7 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
                 )
             )
             unresolved.remove(inv_line)
-    logger.info(f"Fuzzy match resolved {len([r for r in results if r.match_method == Method.fuzzy])} additional line items")
+    logger.info(f"Fuzzy match resolved {len(fuzzy_resolved)} additional line items")
     
     # VECTOR SEARCH
     vector_resolved = []
@@ -168,10 +168,10 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
     try:
         matched_llm = await _llm_match(unresolved, contract_candidates)
         
-        for inv_line_desc, mapping in matched_llm.items():
-            if mapping:
-                contract = next(c for c in contract_candidates if c.product_service_name == mapping)
-                inv_line = next(inv_line for inv_line in unresolved if inv_line.description == inv_line_desc)
+        for inv_line_id, con_line_name in matched_llm.items():
+            if con_line_name:
+                contract = next(c for c in contract_candidates if c.product_service_name == con_line_name)
+                inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
                 
                 results.append(
                     LineItemMatch(
@@ -207,13 +207,7 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
     # ANOMALY FLAGS
     flags = []
     
-    if (results
-        and (
-           fuzzy_resolved
-           or vector_resolved
-           or llm_resolved 
-        )
-    ):
+    if fuzzy_resolved or vector_resolved or llm_resolved:
             
         notes_yellow = NotExactMatchNotes(
             fuzzy_resolved=fuzzy_resolved,
@@ -290,7 +284,6 @@ def _fuzzy_match(
         invoice_line_item: InvoiceLineItem, 
         contract_line_items: list[ContractLineItem],
         confidence_threshold: float = settings.thresholds.pipeline_fuzzy_match_min,
-        
     ) -> tuple[ContractLineItem | None, float]:
     """
     Find best fuzzy match for invoice description across contract line items.
@@ -406,7 +399,7 @@ async def _llm_match(
     """
     Send unresolved invoice descriptions and contract names to local LLM.
 
-    LLM returns a JSON dict mapping each description to a contract name or null.
+    LLM returns a JSON dict mapping each invoice line item id to a contract name or null.
     Hallucinated names (not in contract list) and unknown keys (not in input)
     are filtered out. Confidence fixed at 0.6 for any successful LLM match.
 
@@ -424,10 +417,10 @@ async def _llm_match(
     """
     
     contract_names = [item.product_service_name for item in contract_line_items]
-    inv_line_descriptions = [item.description for item in invoice_line_items]
+    inv_line_ids_descriptions = {str(item.invoice_line_item_id): item.description for item in invoice_line_items}
     
     prompt_formatted = prompt.format(
-        invoice_line_item_descriptions=[item.description for item in invoice_line_items],
+        invoice_line_items=inv_line_ids_descriptions,
         product_service_names=contract_names
     )
     
@@ -437,12 +430,12 @@ async def _llm_match(
         raise ValueError("LLM return is not in dict format!")
     
     results = dict()
-    for inv_line_desc, mapping in response_dict.items():
+    for inv_id, con_line_name in response_dict.items():
         if (
-            inv_line_desc in inv_line_descriptions
-            and mapping 
-            and mapping in contract_names # hallucination check
+            inv_id in inv_line_ids_descriptions
+            and con_line_name 
+            and con_line_name in contract_names # hallucination check
             ):
-            results[inv_line_desc] = mapping
+            results[UUID(inv_id)] = con_line_name
             
     return results
