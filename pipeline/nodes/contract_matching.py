@@ -160,7 +160,7 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
                 )
                 unresolved.remove(inv_line)
         logger.info(f"Vector search resolved {len([r for r in results if r.match_method == Method.vector])} additional line items")
-    except (ChromaError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+    except (ConnectionError, ChromaError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
         logger.warning(f"Skipping vector search, infrastructure unavailable: {e}")
     
     # LLM MATCH
@@ -191,7 +191,7 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
                 unresolved.remove(inv_line)
         logger.info(f"LLM match resolved {len([r for r in results if r.match_method == Method.llm])} additional line items")
         
-    except (httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+    except (ConnectionError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
         logger.warning(f"Skipping LLM match, Ollama unavailable: {e}")
         
             
