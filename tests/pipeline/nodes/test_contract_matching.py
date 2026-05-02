@@ -4,8 +4,9 @@ import json
 from sqlmodel import select
 
 import pytest
+from unittest.mock import patch
 
-from core.exceptions import PipelineRepositoryError, PipelineStateError
+from core.exceptions import PipelineStateError
 
 from pipeline.nodes.contract_matching import contract_matching
 from pipeline.state import PipelineState
@@ -198,7 +199,7 @@ async def test_contract_matching_fuzzy_match_writes_to_table_and_returns_expecte
 
 async def test_contract_matching_unmatched_returns_red_flag(fake_session):
     invoice_id, invoice, inv_line_items = _generate_invoice(line_desc=["invoice item", "item invoice"])
-    contract_summary, con_line_items = _generate_contract(line_desc=["cleaning services", "cleaning material"])
+    contract_summary, _ = _generate_contract(line_desc=["cleaning services", "cleaning material"])
     
     state: PipelineState = {
         "invoice_id": invoice_id,
@@ -225,4 +226,100 @@ async def test_contract_matching_unmatched_returns_red_flag(fake_session):
     unresolved_notes = notes["unresolved_invoice_line_items"]
     assert "invoice item" in unresolved_notes
     assert "item invoice" in unresolved_notes
+    
+
+async def test_contract_matching_vector_match_correct_assignment(fake_session):
+    invoice_id, invoice, inv_line_items = _generate_invoice(line_desc=["invoice item", "item invoice"])
+    contract_summary, _ = _generate_contract(line_desc=["cleaning services", "cleaning material"])
+    
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice": invoice,
+        "invoice_line_items": inv_line_items,
+        "contract_summary": contract_summary,
+    } # type: ignore[typeddict-item]
+    
+    fake_vector_match = {
+        inv_line_items[0].invoice_line_item_id: (
+            ContractLineItem(
+                contract_id=contract_summary.contracts[0].contract.contract_id,
+                product_service_name="cleaning services",
+                unit_price=100.0,
+            ), 
+            0.9
+        ),
+        inv_line_items[1].invoice_line_item_id: (
+            ContractLineItem(
+                contract_id=contract_summary.contracts[0].contract.contract_id,
+                product_service_name="cleaning material",
+                unit_price=100.0,
+            ), 
+            0.95
+        ),
+    }
+
+    with patch(
+        "pipeline.nodes.contract_matching._vector_match",
+        return_value=fake_vector_match
+    ):
+        output = await contract_matching(state)
+    
+    assert len(output["anomaly_flags"]) == 1
+    
+    flag = output["anomaly_flags"][0]
+    assert flag.invoice_id == invoice_id
+    assert flag.anomaly_name=="not_exact_match"
+    assert flag.anomaly_severity==Severity.yellow
+    assert flag.anomaly_source==Source.contract_matching
+    assert flag.anomaly_deviation is None
+    
+    assert flag.anomaly_notes is not None
+    notes = json.loads(flag.anomaly_notes)
+    assert len(notes["vector_resolved"]) == 2
+    
+    vector_notes = notes["vector_resolved"]
+    notes_0 = next(n for n in vector_notes if n["invoice_description"] == "invoice item")
+    assert notes_0["invoice_description"] == "invoice item"
+    assert notes_0["matched_contract_name"] == "cleaning services"
+
+
+async def test_contract_matching_llm_match_correct_assignment(fake_session):
+    invoice_id, invoice, inv_line_items = _generate_invoice(line_desc=["invoice item", "item invoice"])
+    contract_summary, _ = _generate_contract(line_desc=["cleaning services", "cleaning material"])
+    
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice": invoice,
+        "invoice_line_items": inv_line_items,
+        "contract_summary": contract_summary,
+    } # type: ignore[typeddict-item]
+    
+    fake_llm_match = {
+        inv_line_items[0].invoice_line_item_id: "cleaning services",
+        inv_line_items[1].invoice_line_item_id: "cleaning material",
+    }
+    with patch(
+        "pipeline.nodes.contract_matching._llm_match",
+        return_value=fake_llm_match
+    ):
+        output = await contract_matching(state)
+    
+    assert len(output["anomaly_flags"]) == 1
+    
+    flag = output["anomaly_flags"][0]
+    assert flag.invoice_id == invoice_id
+    assert flag.anomaly_name=="not_exact_match"
+    assert flag.anomaly_severity==Severity.yellow
+    assert flag.anomaly_source==Source.contract_matching
+    assert flag.anomaly_deviation is None
+    
+    assert flag.anomaly_notes is not None
+    notes = json.loads(flag.anomaly_notes)
+    assert len(notes["llm_resolved"]) == 2
+    
+    llm_notes = notes["llm_resolved"]
+    notes_0 = next(n for n in llm_notes if n["invoice_description"] == "invoice item")
+    assert notes_0["invoice_description"] == "invoice item"
+    assert notes_0["matched_contract_name"] == "cleaning services"
+    assert notes_0["score"] == 0.6
     
