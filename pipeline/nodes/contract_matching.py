@@ -413,7 +413,7 @@ async def _llm_match(
         prompt: system prompt to map invoice line item description
     
     Returns:
-        ContractLineItem assigned to invoice line item description or None
+        dict with invoice line item id assigned to contract line product / service name or None
     """
     
     contract_names = [item.product_service_name for item in contract_line_items]
