@@ -195,3 +195,34 @@ async def test_contract_matching_fuzzy_match_writes_to_table_and_returns_expecte
     assert result_item1.contract_line_item_id == con_line1.contract_line_item_id
     assert result_item1.match_method == Method.fuzzy
     
+
+async def test_contract_matching_unmatched_returns_red_flag(fake_session):
+    invoice_id, invoice, inv_line_items = _generate_invoice(line_desc=["invoice item", "item invoice"])
+    contract_summary, con_line_items = _generate_contract(line_desc=["cleaning services", "cleaning material"])
+    
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice": invoice,
+        "invoice_line_items": inv_line_items,
+        "contract_summary": contract_summary,
+    } # type: ignore[typeddict-item]
+    
+    output = await contract_matching(state)
+    
+    assert len(output["anomaly_flags"]) == 1
+    
+    flag = output["anomaly_flags"][0]
+    assert flag.invoice_id == invoice_id
+    assert flag.anomaly_name=="unmatched_invoice_line_item"
+    assert flag.anomaly_severity==Severity.red
+    assert flag.anomaly_source==Source.contract_matching
+    assert flag.anomaly_deviation is None
+    
+    assert flag.anomaly_notes is not None
+    notes = json.loads(flag.anomaly_notes)
+    assert len(notes["unresolved_invoice_line_items"]) == 2
+    
+    unresolved_notes = notes["unresolved_invoice_line_items"]
+    assert "invoice item" in unresolved_notes
+    assert "item invoice" in unresolved_notes
+    
