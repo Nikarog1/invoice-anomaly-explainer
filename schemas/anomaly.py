@@ -51,3 +51,19 @@ class NotExactMatchNotes(BaseModel):
     
 class UnresolvedMatchNotes(BaseModel):
     unresolved_invoice_line_items: list[str]
+
+
+class Metric(str, Enum):
+    unit_price = "unit_price"
+    quantity = "quantity"
+    
+class AnomalousStatisticalLine(BaseModel):
+    description: str
+    invoice: float
+    contract: float
+    deviation: float
+    metric: Metric
+    
+class AnomalousStatisticalNotes(BaseModel):
+    anomalous_lines: list[AnomalousStatisticalLine]
+    
