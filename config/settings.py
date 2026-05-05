@@ -17,6 +17,7 @@ class PipelineThresholdSettings(BaseModel):
     default_z_score_threshold: float = 3
     pipeline_fuzzy_match_min: float = 0.85
     pipeline_vector_match_min: float = 0.85
+    default_contract_dev_threshold: float = 0.1
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
