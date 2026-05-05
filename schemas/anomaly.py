@@ -67,3 +67,15 @@ class AnomalousStatisticalLine(BaseModel):
 class AnomalousStatisticalNotes(BaseModel):
     anomalous_lines: list[AnomalousStatisticalLine]
     
+
+class StatisticalMissingField(BaseModel):
+    field: str
+    side: str
+
+class StatisticalMissingFieldLine(BaseModel):
+    description: str
+    missing_fields: list[StatisticalMissingField]
+    
+class StatisticalMissingFieldNotes(BaseModel):
+    lines_with_missing_fields: list[StatisticalMissingFieldLine]
+    
