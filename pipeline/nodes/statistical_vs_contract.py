@@ -50,6 +50,9 @@ def statistical_vs_contract(state: PipelineState) -> dict[str, list[AnomalyFlag]
     ):
         raise PipelineStateError("invoice_line_items or/and contract_summary")
     
+    if contract_summary.is_degraded:
+        return {"anomaly_flags": []}
+    
     contract_candidates: list[ContractLineItem] = [
         item
         for contract in contract_summary.contracts
