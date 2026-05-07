@@ -10,14 +10,14 @@ from core.exceptions import PipelineStateError
 from pipeline.nodes.statistical_vs_contract import statistical_vs_contract
 from pipeline.state import PipelineState
 
-from schemas.anomaly import Metric, Severity, Source
+from schemas.anomaly import Severity, Source
 from schemas.contract import Contract, ContractLineItem, ContractSummary, ContractWithLineItems
 from schemas.junction import LineItemMatch, Method
 from schemas.invoice import InvoiceLineItem
 
 
 
-def _generate_contracts(return_ids: bool = False) -> ContractSummary | tuple[ContractSummary, list[UUID]]:
+def _generate_contracts(return_ids: bool = False):
     contract_1 = Contract(supplier_name="suppl1", buyer_name="comp", signed_on=date(2026, 1, 1))
     contract_lines_1 = [
         ContractLineItem(contract_id=contract_1.contract_id, product_service_name="item1", unit_price=100.0, max_units=1),
@@ -57,8 +57,8 @@ def _insert_line_match(fake_session, invoice_line_ids: list[UUID], contract_line
                 match_score=1.0
             )
         )
-        fake_session.add_all(to_insert)
-        fake_session.commit()
+    fake_session.add_all(to_insert)
+    fake_session.commit()
     
 
 
@@ -77,7 +77,27 @@ def test_statistical_vs_contract_raises_pipeline_exception():
         statistical_vs_contract(state)
         
 
-def test_statistical_vs_contract_empty_line_match_returns_no_anomaly():
+def test_statistical_vs_contract_degraded_contract_returns_no_anomaly():
+    invoice_id = uuid4()
+    invoice_line_item = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=100.0, unit_price=100.0, quantity=100),
+        InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=500.0, unit_price=500.0, quantity=1),
+        InvoiceLineItem(invoice_id=invoice_id, description="item3", amount_gross=500.0, unit_price=500.0, quantity=1),
+    ]
+    contract_summary = _generate_contracts(return_ids=False)
+    contract_summary.is_degraded = True # type: ignore
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_item,
+        "contract_summary": contract_summary # type: ignore
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_contract(state)
+    
+    assert len(output["anomaly_flags"]) == 0
+    
+
+def test_statistical_vs_contract_empty_line_match_returns_no_anomaly(fake_session):
     invoice_id = uuid4()
     invoice_line_item = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=100.0, unit_price=100.0, quantity=1),
@@ -139,7 +159,7 @@ def test_statistical_vs_contract_returns_anomalous_price_flag(fake_session):
     assert line["invoice"] == 500.0
     assert line["contract"] == 50.0
     assert math.isclose(line["deviation"], (500.0 - 50.0) / 50.0, rel_tol=1e-4)
-    assert line["metric"] == Metric.unit_price
+    assert line["metric"] == "unit_price"
     
 
 def test_statistical_vs_contract_returns_anomalous_quantity_flag(fake_session):
@@ -185,7 +205,7 @@ def test_statistical_vs_contract_returns_anomalous_quantity_flag(fake_session):
     assert line["invoice"] == 10.0
     assert line["contract"] == 1.0
     assert math.isclose(line["deviation"], (10.0 - 1.0) / 1.0, rel_tol=1e-4)
-    assert line["metric"] == Metric.quantity
+    assert line["metric"] == "quantity"
     
 
 def test_statistical_vs_contract_returns_anomalous_missing_field_flag(fake_session):
@@ -257,6 +277,9 @@ def test_statistical_vs_contract_returns_all_flags(fake_session):
     flags = output["anomaly_flags"]
     
     assert len(flags) == 3
+    
+    names = {f.anomaly_name for f in flags}
+    assert names == {"unit_price_deviation", "quantity_deviation", "missing_fields"}
     
     
 
