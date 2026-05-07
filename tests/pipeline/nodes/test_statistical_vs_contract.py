@@ -234,6 +234,30 @@ def test_statistical_vs_contract_returns_anomalous_missing_field_flag(fake_sessi
     assert missing_field["field"] == "quantity"
     assert missing_field["side"] == "invoice"
     
+
+def test_statistical_vs_contract_returns_all_flags(fake_session):
+    invoice_id = uuid4()
+    invoice_line_item = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=100.0, unit_price=100.0, quantity=None),
+        InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=500.0, unit_price=500000.0, quantity=1),
+        InvoiceLineItem(invoice_id=invoice_id, description="item3", amount_gross=50.0, unit_price=50.0, quantity=10000),
+    ]
+    contract_summary, con_line_ids = _generate_contracts(return_ids=True)
+    inv_line_ids = [line.invoice_line_item_id for line in invoice_line_item]
+    
+    _insert_line_match(fake_session, inv_line_ids, con_line_ids) # type: ignore
+    
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_item,
+        "contract_summary": contract_summary # type: ignore
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_contract(state)
+    flags = output["anomaly_flags"]
+    
+    assert len(flags) == 3
+    
     
 
     
