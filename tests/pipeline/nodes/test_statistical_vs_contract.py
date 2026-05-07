@@ -187,6 +187,53 @@ def test_statistical_vs_contract_returns_anomalous_quantity_flag(fake_session):
     assert math.isclose(line["deviation"], (10.0 - 1.0) / 1.0, rel_tol=1e-4)
     assert line["metric"] == Metric.quantity
     
+
+def test_statistical_vs_contract_returns_anomalous_missing_field_flag(fake_session):
+    invoice_id = uuid4()
+    invoice_line_item = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=100.0, unit_price=100.0, quantity=None),
+        InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=500.0, unit_price=500.0, quantity=1),
+        InvoiceLineItem(invoice_id=invoice_id, description="item3", amount_gross=50.0, unit_price=50.0, quantity=1),
+    ]
+    contract_summary, con_line_ids = _generate_contracts(return_ids=True)
+    inv_line_ids = [line.invoice_line_item_id for line in invoice_line_item]
+    
+    _insert_line_match(fake_session, inv_line_ids, con_line_ids) # type: ignore
+    
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_item,
+        "contract_summary": contract_summary # type: ignore
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_contract(state)
+    flags = output["anomaly_flags"]
+    
+    assert len(flags) == 1
+    
+    flag = flags[0]
+    assert flag.invoice_id == invoice_id
+    assert flag.anomaly_name == "missing_fields"
+    assert flag.anomaly_severity == Severity.yellow
+    assert flag.anomaly_source == Source.statistical_vs_contract
+    assert flag.anomaly_deviation is None
+    
+    assert flag.anomaly_notes is not None
+    notes = json.loads(flag.anomaly_notes)
+    
+    lines = notes["lines_with_missing_fields"]
+    
+    assert len(lines) == 1
+    
+    line = lines[0]
+    
+    assert line["description"] == "item1"
+    
+    missing_fields = line["missing_fields"]
+    missing_field = missing_fields[0]
+    assert missing_field["field"] == "quantity"
+    assert missing_field["side"] == "invoice"
+    
     
 
     
