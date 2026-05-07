@@ -60,11 +60,14 @@ def statistical_vs_contract(state: PipelineState) -> dict[str, list[AnomalyFlag]
     ]
     
     with get_session() as session:
-        line_item_match = session.exec(
-            select(LineItemMatch)
-            .where(LineItemMatch.contract_line_item_id.in_([con.contract_line_item_id for con in contract_candidates])) # type: ignore
-            .where(LineItemMatch.invoice_line_item_id.in_([inv.invoice_line_item_id for inv in invoice_line_items])) # type: ignore
-        ).all()
+        try:
+            line_item_match = session.exec(
+                select(LineItemMatch)
+                .where(LineItemMatch.contract_line_item_id.in_([con.contract_line_item_id for con in contract_candidates])) # type: ignore
+                .where(LineItemMatch.invoice_line_item_id.in_([inv.invoice_line_item_id for inv in invoice_line_items])) # type: ignore
+            ).all()
+        except:
+            line_item_match = None
         
     if not line_item_match:
         logger.info("No contract matches for invoice line items, skipping")
