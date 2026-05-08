@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import json
 from pydantic import ValidationError
 
+from config.prompts import EXPLANATION_NARRATIVE_PROMPT, EXPLANATION_PLAN_PROMPT
 from core.exceptions import ExplanationFailedError, PipelineStateError
 from core.logging import get_logger
 
@@ -80,12 +81,12 @@ async def explanation(state: PipelineState) -> dict[str, AnomalyReport]:
     )
     
     logger.info("Step 1: requesting structured plan")
-    structured_output = await _get_structured_explanation(explanation_context, prompt="will be added")
+    structured_output = await _get_structured_explanation(explanation_context, EXPLANATION_PLAN_PROMPT)
     
     logger.info("Step 2: requesting narrative")
-    plain_explanation = await _get_plain_explanation(structured_output, prompt="will be added")
+    plain_explanation = await _get_plain_explanation(structured_output, EXPLANATION_NARRATIVE_PROMPT)
     
-    logger.info(f"Explanation produced ({len(plain_explanation)} chars")
+    logger.info(f"Explanation produced ({len(plain_explanation)} chars)")
     report = AnomalyReport(
         invoice_id=invoice.invoice_id,
         anomalies_count=len(anomaly_flags),
@@ -187,11 +188,6 @@ async def _get_structured_explanation(
     Raises:
         ExplanationFailedError: if both attempts fail validation.
     """
-    prompt = """
-    some prompt with {context} and format of output {output_schema},
-    also with format of {severities} and {sources}
-    , will be added later
-    """
     base_prompt = prompt.format(
         context=explanation_context.model_dump_json(indent=2),
         output_schema=ExplanationPlan.model_json_schema(),
@@ -234,11 +230,8 @@ async def _get_plain_explanation(
     Raises:
         ExplanationFailedError: if both attempts fail to return a string.
     """
-    prompt = """
-    some prompt with {structured_output} and format of return defined directly in prompt, will be added later
-    """
     base_prompt = prompt.format(
-        structured_output=structured_output,
+        plan=structured_output.model_dump_json(indent=2),
     )
     
     for attempt in range(2):
