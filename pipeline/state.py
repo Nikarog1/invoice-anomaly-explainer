@@ -1,9 +1,8 @@
-from datetime import datetime
 import operator
 from typing import Annotated, TypedDict
 from uuid import UUID
 
-from schemas.anomaly import AnomalyFlag
+from schemas.anomaly import AnomalyFlag, AnomalyReport
 from schemas.contract import ContractSummary
 from schemas.history import HistoricalSummary
 from schemas.junction import LineItemMatch
@@ -18,8 +17,5 @@ class PipelineState(TypedDict):
     historical_summary: HistoricalSummary | None
     contract_summary: ContractSummary | None 
     line_item_matches: list[LineItemMatch]
-    anomaly_flags: Annotated[list[AnomalyFlag], operator.add] # should accumulate different anomaly_flags, each flag has it's own model
-    agent_explanation: str | None  # produced by explanation agent
-    explanation_datetime: datetime | None
-    anomaly_report_id: UUID | None
-    
+    anomaly_flags: Annotated[list[AnomalyFlag], operator.add]
+    agent_report: AnomalyReport | None
