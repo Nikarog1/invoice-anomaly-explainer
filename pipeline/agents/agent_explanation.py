@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import json
+from pydantic import ValidationError
 
 from core.exceptions import ExplanationFailedError, PipelineStateError
 from core.logging import get_logger
@@ -7,8 +8,8 @@ from core.logging import get_logger
 from data.llm_client import call_local_llm
 
 from pipeline.agents.models import (
-    ConcernEntry, ExplanationContext, ExplanationPlan, 
-    FlagEntry, FlagGroup, InvoiceSummary, LineItemSummary,
+    ExplanationContext, ExplanationPlan, 
+    FlagEntry, InvoiceSummary, LineItemSummary,
 )
 from pipeline.state import PipelineState
 
@@ -39,6 +40,18 @@ async def explanation(state: PipelineState) -> dict[str, AnomalyReport]:
         )
     anomaly_flags = state["anomaly_flags"]
     
+    if len(anomaly_flags) == 0:
+        logger.info("No anomalies, skipping LLM")
+        report = AnomalyReport(
+            invoice_id=invoice.invoice_id,
+            anomalies_count=len(anomaly_flags),
+            agent_explanation="No anomaly found, everything is fine.",
+            explanation_date=datetime.now(tz=timezone.utc)
+        )
+        return {
+            "agent_report": report
+        }
+    
     invoice_summary = _create_invoice_summary(invoice, invoice_line_items)
     flag_entries = _create_flag_entries(anomaly_flags)
     explanation_context = _create_explanation_context(
@@ -48,8 +61,8 @@ async def explanation(state: PipelineState) -> dict[str, AnomalyReport]:
         flag_entries,
     )
     
-    structured_output = await _get_structured_explanation(explanation_context)
-    plain_explanation = await _get_plain_explanation(structured_output)
+    structured_output = await _get_structured_explanation(explanation_context, prompt="will be added")
+    plain_explanation = await _get_plain_explanation(structured_output, prompt="will be added")
     
     report = AnomalyReport(
         invoice_id=invoice.invoice_id,
@@ -152,105 +165,67 @@ def _create_explanation_context(
 
 
 async def _get_structured_explanation(
-        explanation_context: ExplanationContext,
-        attempt: int = 0    
-) -> ExplanationPlan:
-    attempt += 1
+        explanation_context: ExplanationContext, 
+        prompt: str
+) -> ExplanationPlan: # type: ignore
     prompt = """
-    some prompt with {context} and format of output {format} and 2 arguments {format_arg1} & {format_arg2},
-    also with format of {severity} and {source}
+    some prompt with {context} and format of output {output_schema},
+    also with format of {severities} and {sources}
     , will be added later
     """
-    prompt_formatted = prompt.format(
-        context=explanation_context,
-        format=ExplanationPlan, # not sure about this one
-        format_arg1=ConcernEntry, # not sure about this one
-        format_arg2=FlagGroup, # not sure about this one
-        severity=Severity, # not sure about this one
-        source=Source, # not sure about this one
+    base_prompt = prompt.format(
+        context=explanation_context.model_dump_json(indent=2),
+        output_schema=ExplanationPlan.model_json_schema(),
+        severities=[s.value for s in Severity],
+        sources=[s.value for s in Source],
     )
     
-    response_dict = await call_local_llm(prompt_formatted, expect_json=True)
+    last_error = None
     
-    if (
-        response_dict is None
-        or not isinstance(response_dict, dict)
-        or (
-            not response_dict["summary"]
-            or not response_dict["top_concerns"]
-            or not response_dict["degradation_caveats"]
-            or not response_dict["flag_groupings"]
-        )
-        or (
-            not response_dict["top_concerns"][0]["anomaly_name"]
-            or not response_dict["top_concerns"][0]["anomaly_severity"]
-            or not response_dict["top_concerns"][0]["anomaly_source"]
-            or not response_dict["top_concerns"][0]["reason"]
-            or not response_dict["flag_groupings"][0]["theme"]
-            or not response_dict["flag_groupings"][0]["flags"]
-            or not response_dict["flag_groupings"][0]["flags"][0]["anomaly_name"]
-            or not response_dict["flag_groupings"][0]["flags"][0]["anomaly_severity"]
-            or not response_dict["flag_groupings"][0]["flags"][0]["anomaly_source"]
-            or not response_dict["flag_groupings"][0]["flags"][0]["reason"]
-        )
-        and attempt < 2
-    ):
-        result = await _get_structured_explanation(explanation_context, attempt=attempt) # return back to llm? would need to adjust prompt?
-        return result
-
-    if attempt >= 2:
-        raise ExplanationFailedError("Failed to receive requested output in step 1!")
-    
-    structured_explanation = ExplanationPlan(
-        summary=response_dict["summary"],
-        top_concerns=[
-            ConcernEntry(
-                anomaly_name=concern["anomaly_name"],
-                anomaly_severity=concern["anomaly_severity"],
-                anomaly_source=concern["anomaly_source"],
-                reason=concern["reason"],
+    for attempt in range(2):
+        prompt = base_prompt
+        
+        if attempt > 0:
+            prompt = (
+                base_prompt 
+                + f"\n Previous attempt returned {last_error} validation error. Please return valid JSON matching schema"
             )
-            for concern in response_dict["top_concerns"]
-        ],
-        degradation_caveats=[
-            caveat
-            for caveat in response_dict["degradation_caveats"]
-        ],
-        flag_groupings=[
-            FlagGroup(
-                theme=group["theme"],
-                flags=[
-                    ConcernEntry(
-                        anomaly_name=concern["anomaly_name"],
-                        anomaly_severity=concern["anomaly_severity"],
-                        anomaly_source=concern["anomaly_source"],
-                        reason=concern["reason"],
-                    )
-                    for concern in group["flags"]    
-                ]
-            )
-            for group in response_dict["flag_groupings"]
-        ]
-    )
+        response = await call_local_llm(prompt, expect_json=True)
+        
+        try:
+            return ExplanationPlan.model_validate(response)
+        except ValidationError as e:
+            last_error = e
     
-    return structured_explanation
+    raise ExplanationFailedError(f"Step 1: {str(last_error)}")
 
 
 
-async def _get_plain_explanation(structured_output: ExplanationPlan) -> str:
+async def _get_plain_explanation(
+        structured_output: ExplanationPlan,
+        prompt: str
+) -> str:
     prompt = """
     some prompt with {structured_output} and format of return defined directly in prompt, will be added later
     """
-    prompt_formatted = prompt.format(
+    base_prompt = prompt.format(
         structured_output=structured_output,
     )
     
-    response_str = await call_local_llm(prompt_formatted, expect_json=False)
-    
-    if not isinstance(response_str, str):
-        raise ExplanationFailedError("Failed to return string in step 2!")
-    
-    return response_str
+    for attempt in range(2):
+        prompt = base_prompt
+        
+        if attempt > 0:
+            prompt = (
+                base_prompt 
+                + f"\n Previous attempt did not return string. Please return valid string."
+            )
+        response = await call_local_llm(prompt, expect_json=False)
+        
+        if isinstance(response, str):
+            return response
+        
+    raise ExplanationFailedError("Step 2: LLM returned non-string response")
 
     
     
