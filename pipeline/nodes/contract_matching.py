@@ -260,13 +260,6 @@ def _exact_match(invoice_line_item: InvoiceLineItem, contract_line_items: list[C
     """
     Compare invoice description to contract product_service_name with raw equality.
     Returns the first matching ContractLineItem, or None.
-    
-    Args:
-        invoice_line_item: InvoiceLineItem object
-        contract_line_items: list of ContractLineItem objects
-    
-    Returns:
-        ContractLineItem or None
     """
     contract = next(
         (
@@ -291,15 +284,6 @@ def _fuzzy_match(
     Uses rapidfuzz token_set_ratio (handles word reordering and extra/missing tokens).
     Returns the best-scoring contract item if score >= threshold, else (None, 0.0).
     Ties broken by first-seen order.
-    
-    Args:
-        invoice_line_item: InvoiceLineItem object
-        contract_line_items: list of ContractLineItem objects
-        supplier_name: supplier name from invoice / contracts
-        confidence_threshold: threshold from settings to accept fuzzy search result
-    
-    Returns:
-        tuple with ContractLineItem or None, and similarity score
     """
     best_score = 0.0
     best_contract_item = None
@@ -332,15 +316,6 @@ def _vector_match(
     line items. Distances converted to similarity (1 - cosine_distance).
     Returns mapping invoice_line_item_id -> (contract_item or None, score).
     Items below threshold mapped to (None, 0.0).
-    
-    Args:
-        invoice_line_items: list of InvoiceLineItem objects
-        contract_line_items: list of ContractLineItem objects
-        supplier_name: supplier name from invoice / contracts
-        confidence_threshold: threshold from settings to accept vector search result
-    
-    Returns:
-        dict with invoice line item id (key) and tuple (value) with ContractLineItem or None, and similarity score
     """
     results: dict[UUID, tuple[ContractLineItem | None, float]] = dict()
     contract_ids = [str(c.contract_line_item_id) for c in contract_line_items]
@@ -404,16 +379,6 @@ async def _llm_match(
     are filtered out. Confidence fixed at 0.6 for any successful LLM match.
 
     Returns dict description -> matched_name. Empty dict on no matches.
-    
-    Args:
-        invoice_line_items: list of InvoiceLineItem objects
-        contract_line_items: list of ContractLineItem objects
-        ollama_url: ollama url of local model
-        model_name: model name performing validation
-        prompt: system prompt to map invoice line item description
-    
-    Returns:
-        dict with invoice line item id assigned to contract line product / service name or None
     """
     
     contract_names = [item.product_service_name for item in contract_line_items]
