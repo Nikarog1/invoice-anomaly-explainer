@@ -52,4 +52,10 @@ class PipelineStateError(Exception):
     def __init__(self, field_name: str):
         self.field_name = field_name
         super().__init__(f"Required state field '{field_name}' is None.")
+        
+class ExplanationFailedError(Exception):
+    """Raised when explanation node fails."""
+    def __init__(self, reason: str):
+        self.reason = reason
+        super().__init__(f"Explanation failed: {reason}")
     
