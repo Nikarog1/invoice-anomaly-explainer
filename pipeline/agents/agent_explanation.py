@@ -23,6 +23,24 @@ logger = get_logger(__name__)
 
 
 async def explanation(state: PipelineState) -> dict[str, AnomalyReport]:
+    """
+    Run two-step LLM agent to produce a plain-English anomaly explanation.
+
+    Step 1: LLM analyzes flags and returns a structured plan (priorities, groupings).
+    Step 2: LLM writes the user-facing narrative conditioned on the plan.
+
+    When invoice has no anomaly flags, skips both LLM calls and returns a templated
+    "clean invoice" report.
+
+    Returns:
+        {"agent_report": AnomalyReport} — explanation string stored in agent_explanation field.
+        Report persistence handled by the delivery node.
+
+    Raises:
+        PipelineStateError: if any required state field is missing.
+        ExplanationFailedError: if either LLM step fails after retries.
+    """
+    
     logger.info("Running explanation")
     invoice = state["invoice"]
     invoice_line_items = state["invoice_line_items"]
@@ -61,9 +79,13 @@ async def explanation(state: PipelineState) -> dict[str, AnomalyReport]:
         flag_entries,
     )
     
+    logger.info("Step 1: requesting structured plan")
     structured_output = await _get_structured_explanation(explanation_context, prompt="will be added")
+    
+    logger.info("Step 2: requesting narrative")
     plain_explanation = await _get_plain_explanation(structured_output, prompt="will be added")
     
+    logger.info(f"Explanation produced ({len(plain_explanation)} chars")
     report = AnomalyReport(
         invoice_id=invoice.invoice_id,
         anomalies_count=len(anomaly_flags),
@@ -82,14 +104,11 @@ def _create_invoice_summary(
         invoice_line_items: list[InvoiceLineItem],  
 ) -> InvoiceSummary:
     """
-    Create invoice summary for explanation agent.
-    
-    Args:
-        invoice: Invoice object
-        invoice_line_items: list of InvoiceLineItem objects
-        
-    Returns:
-        InvoiceSummary object
+    Build the invoice presentation passed to the explanation agent.
+
+    Strips internal IDs and metadata; keeps only fields the agent uses
+    to describe the invoice to the user (number, supplier, date, totals,
+    line item descriptions and amounts).
     """
     line_item_summary = [
         LineItemSummary(
@@ -115,13 +134,10 @@ def _create_invoice_summary(
 
 def _create_flag_entries(flags: list[AnomalyFlag]) -> list[FlagEntry]:
     """
-    Create anomaly flag entries for explanation agent.
-    
-    Args:
-        flags: list of AnomalyFlag objects or empty list
-        
-    Returns:
-        list of FlagEntry objects
+    Convert AnomalyFlag rows into agent-shaped entries.
+
+    Parses anomaly_notes JSON back into a dict so the agent receives structured
+    data rather than raw strings. None notes preserved as None.
     """
     flag_entries = [
         FlagEntry(
@@ -143,16 +159,10 @@ def _create_explanation_context(
         flag_entries: list[FlagEntry],
 ) -> ExplanationContext:
     """
-    Create explanation context for explanation agent.
-    
-    Args:
-        invoice_summary: InvoiceSummary object
-        historical_summary: HistoricalSummary object
-        contract_summary: ContractSummary object
-        flag_entries: list of FlagEntry objects
-        
-    Returns:
-        ExplanationContext object
+    Assemble the full input bundle for the explanation agent.
+
+    Merges invoice presentation, degradation reasons from history and contract
+    summaries, and parsed flag entries into a single ExplanationContext.
     """
     explanation_context = ExplanationContext(
         invoice_summary=invoice_summary,
@@ -168,6 +178,15 @@ async def _get_structured_explanation(
         explanation_context: ExplanationContext, 
         prompt: str
 ) -> ExplanationPlan: # type: ignore
+    """
+    LLM step 1: produce structured analysis plan from explanation context.
+
+    Sends context + ExplanationPlan schema to LLM. Validates response with Pydantic.
+    On validation failure, retries once with the validation error fed back to the LLM.
+
+    Raises:
+        ExplanationFailedError: if both attempts fail validation.
+    """
     prompt = """
     some prompt with {context} and format of output {output_schema},
     also with format of {severities} and {sources}
@@ -196,6 +215,7 @@ async def _get_structured_explanation(
             return ExplanationPlan.model_validate(response)
         except ValidationError as e:
             last_error = e
+            logger.warning(f"Step 1 attempt {attempt + 1} failed validation: {e}")
     
     raise ExplanationFailedError(f"Step 1: {str(last_error)}")
 
@@ -205,6 +225,15 @@ async def _get_plain_explanation(
         structured_output: ExplanationPlan,
         prompt: str
 ) -> str:
+    """
+    LLM step 2: produce plain-English narrative from structured plan.
+
+    Sends the analysis plan to LLM, expects free-form string response.
+    Retries once on non-string response.
+
+    Raises:
+        ExplanationFailedError: if both attempts fail to return a string.
+    """
     prompt = """
     some prompt with {structured_output} and format of return defined directly in prompt, will be added later
     """
@@ -224,6 +253,7 @@ async def _get_plain_explanation(
         
         if isinstance(response, str):
             return response
+        logger.warning(f"Step 2 attempt {attempt + 1} returned non-string")
         
     raise ExplanationFailedError("Step 2: LLM returned non-string response")
 
