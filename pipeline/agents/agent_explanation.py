@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import json
 from pydantic import ValidationError
 
-from config.prompts import EXPLANATION_NARRATIVE_PROMPT, EXPLANATION_PLAN_PROMPT
+from config.prompts.explanation import EXPLANATION_NARRATIVE_PROMPT, EXPLANATION_PLAN_PROMPT
 from core.exceptions import ExplanationFailedError, PipelineStateError
 from core.logging import get_logger
 

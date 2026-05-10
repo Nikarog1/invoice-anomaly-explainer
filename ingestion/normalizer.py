@@ -8,7 +8,7 @@ from uuid import UUID
 
 from rapidfuzz import fuzz
 
-from config.prompts import COLUMN_MAPPING_PROMPT
+from config.prompts.column_mapping import COLUMN_MAPPING_PROMPT
 from core.logging import get_logger
 
 from data.llm_client import call_local_llm

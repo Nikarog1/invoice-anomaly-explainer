@@ -8,7 +8,7 @@ from rapidfuzz import fuzz
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import select
 
-from config.prompts import CONTRACT_MATCHING_PROMPT
+from config.prompts.contract_matching import CONTRACT_MATCHING_PROMPT
 from config.settings import settings
 
 from core.exceptions import PipelineRepositoryError, PipelineStateError
