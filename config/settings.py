@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     model_name: str = "mistral"
     embedding_model_name: str = "nomic-embed-text"
     sqlite_url: str = "sqlite:///./data/data.db"
-    checkpoint_url: str = "sqlite:///./data/checkpoints.db"
+    checkpoint_path: str = "./data/checkpoints.db"
     chromadb_path: Path = Path("./data/chroma")
     fastapi_host: str = "127.0.0.1"
     fastapi_port: int = 8000
