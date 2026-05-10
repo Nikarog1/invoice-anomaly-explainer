@@ -13,6 +13,7 @@ dependencies = [
     "fastapi[standard]",
     "uvicorn",
     "sqlmodel",
+    "langgraph-checkpoint-sqlite>=3.0.3",
 ]
 
 [project.optional-dependencies]
