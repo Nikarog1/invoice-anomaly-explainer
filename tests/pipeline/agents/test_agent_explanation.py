@@ -135,3 +135,92 @@ async def test_explanation_raises_exception_step2():
     ):
         with pytest.raises(ExplanationFailedError):
             await explanation(state)
+            
+
+async def test_explanation_full_pipeline_returns_expected_output():
+    state = _generate_state()
+    state["anomaly_flags"] = [
+        AnomalyFlag(
+            anomaly_report_id=None,
+            invoice_id=state["invoice_id"],
+            anomaly_name="line_amount_deviation",
+            anomaly_severity=Severity.yellow,
+            anomaly_source=Source.statistical_vs_history,
+            anomaly_deviation=None,
+            anomaly_notes=None
+        )
+    ]
+    
+    fake_structured_output = ExplanationPlan(
+        summary="some summary",
+        top_concerns=[],
+        degradation_caveats=[],
+        flag_groupings=[]
+    )
+    fake_plain_explanation = "some explanation"
+    
+    with (
+        patch(
+            "pipeline.agents.agent_explanation._get_structured_explanation",
+            new_callable=AsyncMock,
+            return_value=fake_structured_output,
+        ),
+        patch(
+            "pipeline.agents.agent_explanation._get_plain_explanation",
+            new_callable=AsyncMock,
+            return_value=fake_plain_explanation,
+        ),
+    ):
+        output = await explanation(state)
+        
+    report = output["agent_report"]
+    assert report.invoice_id == state["invoice_id"]
+    assert report.anomalies_count == 1
+    assert report.agent_explanation == "some explanation"
+    assert report.explanation_date
+    assert report.explanation_date.tzinfo == timezone.utc
+    
+
+async def test_explanation_suceeds_on_second_try_returns_expected():
+    state = _generate_state()
+    state["anomaly_flags"] = [
+        AnomalyFlag(
+            anomaly_report_id=None,
+            invoice_id=state["invoice_id"],
+            anomaly_name="line_amount_deviation",
+            anomaly_severity=Severity.yellow,
+            anomaly_source=Source.statistical_vs_history,
+            anomaly_deviation=None,
+            anomaly_notes=None
+        )
+    ]
+    
+    fake_structured_output = ExplanationPlan(
+        summary="some summary",
+        top_concerns=[],
+        degradation_caveats=[],
+        flag_groupings=[]
+    )
+    llm_mock = AsyncMock(side_effect=[
+        {"bad": "response"},
+        fake_structured_output,
+    ])
+    
+    fake_plain_explanation = "some explanation"
+
+    with (
+        patch(
+            "pipeline.agents.agent_explanation.call_local_llm",
+            new=llm_mock,
+        ),
+        patch(
+            "pipeline.agents.agent_explanation._get_plain_explanation",
+            new_callable=AsyncMock,
+            return_value=fake_plain_explanation,
+        ),
+    ):
+        output = await explanation(state)
+        
+    report = output["agent_report"]
+    assert report
+    assert llm_mock.call_count == 2
