@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
-from uuid import uuid4, UUID
+from uuid import uuid4
 
 from sqlmodel import select
+
+import pytest
+
+from core.exceptions import PipelineStateError
 
 from pipeline.nodes.delivery import delivery 
 from pipeline.state import PipelineState
@@ -10,7 +14,7 @@ from schemas.anomaly import AnomalyFlag, AnomalyReport, Severity, Source
 
 
 
-def test_delivery_returns_expected_output(fake_session):
+def test_delivery_returns_expected_output(fake_session) -> None:
     invoice_id = uuid4()
     anomaly_report = AnomalyReport(
         invoice_id=invoice_id,
@@ -54,3 +58,14 @@ def test_delivery_returns_expected_output(fake_session):
     flags = fake_session.exec(select(AnomalyFlag)).all()
     assert len(flags) == 2
     assert all(f.anomaly_report_id == anomaly_report.anomaly_report_id for f in flags)
+    
+
+def test_delivery_raises_exception() -> None:
+    state: PipelineState = {
+        "invoice_id": uuid4(),
+        "agent_report": None,
+    } # type: ignore[typeddict-item]
+    
+    with pytest.raises(PipelineStateError):
+        delivery(state)
+    
