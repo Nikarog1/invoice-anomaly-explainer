@@ -12,9 +12,8 @@ logger = get_logger(__name__)
 def delivery(state: PipelineState) -> dict:
     logger.info("Running delivery")
     
-    anomaly_count = len(state["anomaly_flags"])
-    line_item_count = len(state["line_item_matches"])
     agent_report = state["agent_report"]
+    anomaly_count = agent_report.anomalies_count if agent_report else 0
     
     if agent_report is None:
         raise PipelineStateError("agent_report")
@@ -38,7 +37,6 @@ def delivery(state: PipelineState) -> dict:
             raise PipelineRepositoryError(agent_report.invoice_id) from e
         
     logger.info(f"Successfully wrote 1 anomaly report and {anomaly_count} anomaly flag{"s" if anomaly_count != 1 else ""} to db")
-    logger.info(f"Successfully wrote {line_item_count} line item match{"es" if line_item_count != 1 else ""} to db")
     logger.info(f"Agent explanation: {agent_explanation}")
     
     return {
