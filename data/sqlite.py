@@ -16,4 +16,4 @@ def create_db_and_tables() -> None:
     SQLModel.metadata.create_all(engine)
     
 def get_session() -> Session:
-    return Session(engine)
+    return Session(engine, expire_on_commit=False)
