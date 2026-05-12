@@ -30,8 +30,6 @@ class Normalizer:
         data: list of RawInvoice object from CSVParser
         path: path to columns_mapping
         confidence_threshold: confidence threshold for fuzzy match mapping from config/settings.py
-        ollama_url: ollama url of local model
-        model_name: model name performing validation
     """
     
     def __init__(
@@ -39,11 +37,9 @@ class Normalizer:
             data: list[RawInvoice], 
             path: str | Path = "./config/columns_mapping.json",
             confidence_threshold: float = 0.85,
-            ollama_url: str = "http://localhost:11434",
-            model_name: str = "mistral",
         ) -> None:
         
-        logger.debug(f"Normalizer initialized with threshold={confidence_threshold}, model={model_name}")
+        logger.debug(f"Normalizer initialized with threshold={confidence_threshold}")
         
         if len(data) == 0:
             raise ValueError("Provided data must contain at least 1 row!")
@@ -54,8 +50,6 @@ class Normalizer:
         ]
         self._columns_mapping = self._read_columns_mapping_json(path)
         self._confidence_threshold = confidence_threshold
-        self._ollama_url = ollama_url
-        self._model_name = model_name
         
 
     async def normalize(self) -> IngestionResult:
@@ -99,14 +93,13 @@ class Normalizer:
             if unresolved_schema_fields or unresolved_raw_fields:
                 try: 
                     mapping_llm = await self._llm_match_columns(
-                        self._ollama_url,
-                        self._model_name,
                         COLUMN_MAPPING_PROMPT,
                         self._columns_mapping,
                         unresolved_schema_fields,
                         unresolved_raw_fields,
                     )
-                    logger.warning(f"LLM match resolved {len([r for r in mapping_llm if r.resolved])} columns — review recommended")
+                    if mapping_llm:
+                        logger.warning(f"LLM match resolved {len([r for r in mapping_llm if r.resolved])} columns — review recommended")
                 except Exception as e:
                     logger.warning(f"Skipping LLM match, could not access Ollama: {e}")
         
@@ -315,8 +308,6 @@ class Normalizer:
 
     @staticmethod
     async def _llm_match_columns(
-        ollama_url: str,
-        model_name: str,
         prompt: str,
         mapping: dict,
         unresolved_schema_fields: list,
@@ -330,8 +321,6 @@ class Normalizer:
         NOTE: confidence score for llm match is always 0.6.
         
         Args:
-            ollama_url: ollama url of local model
-            model_name: model name performing validation
             prompt: system prompt to map fields
             mapping: nested dict, columns_mapping.json
             unresolved_schema_fields: unresolved schema_fields (desired cols) from fuzzy match
