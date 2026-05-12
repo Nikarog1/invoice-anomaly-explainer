@@ -5,9 +5,6 @@ from enum import Enum
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel 
 
-from schemas.invoice import InvoiceLineItem
-from schemas.junction import LineItemMatch
-
 
 
 class Severity(str, Enum):
