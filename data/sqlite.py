@@ -10,7 +10,7 @@ from schemas.junction import LineItemMatch
 
 
 
-engine = create_engine(settings.sqlite_url, echo=True) # in prod change to echo=False; potentially add async option connect_args={"check_same_thread": False}
+engine = create_engine(settings.sqlite_url, echo=False)
 
 def create_db_and_tables() -> None:  
     SQLModel.metadata.create_all(engine)
