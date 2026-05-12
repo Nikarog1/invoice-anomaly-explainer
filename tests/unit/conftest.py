@@ -9,7 +9,7 @@ from chromadb.config import Settings
 from sqlmodel import Session, SQLModel
 
 from data.sqlite import engine, create_db_and_tables
-from tests.data.test_vector_store import FakeEmbeddingFunction
+from tests.unit.data.test_vector_store import FakeEmbeddingFunction
 
 
 
