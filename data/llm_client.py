@@ -12,10 +12,11 @@ async def call_local_llm(
     ollama_url: str = settings.ollama_base_url,
 ) -> dict[str, str | None] | str | None:
     """Send prompt to local Ollama, return parsed JSON dict or raw string."""
-    async with AsyncClient() as client:
+    ollama_url_enhanced = f"{ollama_url.rstrip('/')}/api/chat"
+    async with AsyncClient(timeout=settings.ollama_timeout) as client:
         request = client.build_request(
             "POST", 
-            ollama_url, 
+            ollama_url_enhanced, 
             json={ 
                 "model": model_name, 
                 "format": "json", 
