@@ -1,12 +1,16 @@
 import chromadb
 from chromadb.utils.embedding_functions.ollama_embedding_function import OllamaEmbeddingFunction
 
+from chromadb.config import Settings
 from config.settings import settings
 from schemas.contract import ContractWithLineItems
 
 
 
-client = chromadb.PersistentClient(settings.chromadb_path)
+client = chromadb.PersistentClient(
+    path=settings.chromadb_path,
+    settings=Settings(allow_reset=True),
+)
 
 embedding_function = OllamaEmbeddingFunction(
     url=settings.ollama_base_url,
