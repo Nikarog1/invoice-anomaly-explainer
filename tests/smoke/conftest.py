@@ -8,7 +8,9 @@ from pathlib import Path
 import pytest
 import shutil
 from sqlmodel import SQLModel
+
 from data.sqlite import engine
+from data.vector_store import client as chroma_client
 
 
 @pytest.fixture(autouse=True)
@@ -18,9 +20,7 @@ def clean_smoke_state():
     SQLModel.metadata.create_all(engine)
     
     # chroma
-    chroma_path = Path(os.environ["CHROMADB_PATH"])
-    if chroma_path.exists():
-        shutil.rmtree(chroma_path)
+    chroma_client.reset()
     
     # checkpoints
     checkpoint_path = Path(os.environ["CHECKPOINT_PATH"])
