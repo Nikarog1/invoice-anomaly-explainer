@@ -32,8 +32,9 @@ select = ["E", "F", "I"]
 [tool.pytest.ini_options]
 addopts = "-q"
 asyncio_mode = "auto" # no need to manually decorate each async test
-pythonpath = ["."]
 filterwarnings = [
     "ignore:coroutine.*was never awaited:RuntimeWarning",
     "ignore::DeprecationWarning:chromadb"
 ]
+markers = ["smoke: end-to-end pipeline tests requiring Ollama and ChromaDB"]
+pythonpath = ["."]
