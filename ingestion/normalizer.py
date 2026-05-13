@@ -98,8 +98,10 @@ class Normalizer:
                         unresolved_schema_fields,
                         unresolved_raw_fields,
                     )
-                    if mapping_llm:
-                        logger.warning(f"LLM match resolved {len([r for r in mapping_llm if r.resolved])} columns — review recommended")
+                    llm_resolved = len([r for r in mapping_llm if r.resolved])
+                    logger.warning(f"LLM match resolved {llm_resolved} column{"" if llm_resolved == 1 else "s"} " 
+                                   f"{"— review recommended" if llm_resolved else ""}"
+                    )
                 except Exception as e:
                     logger.warning(f"Skipping LLM match, could not access Ollama: {e}")
         
