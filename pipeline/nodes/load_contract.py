@@ -99,7 +99,10 @@ def load_contract(state: PipelineState) -> dict[str, ContractSummary]:
         degradation_reason=None,
     )
     
-    logger.info(f"Loaded {len(results)} contracts with {len(contracts_line_items)} line items "
+    no_contracts = len(results)
+    no_con_lines = len(contracts_line_items)
+    logger.info(f"Loaded {no_contracts} contract{"s" if no_contracts > 1 else ""} "
+                f"with {no_con_lines} line item{"s" if no_con_lines > 1 else ""} "
                 f"for supplier '{supplier_name}', for invoice with issue_date {issue_date}"
     ) 
        
