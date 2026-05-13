@@ -190,7 +190,6 @@ async def _get_structured_explanation(
     """
     base_prompt = prompt.format(
         context=explanation_context.model_dump_json(indent=2),
-        output_schema=ExplanationPlan.model_json_schema(),
         severities=[s.value for s in Severity],
         sources=[s.value for s in Source],
     )
