@@ -47,13 +47,21 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
             unmatched_lines.add(item.description)
             
         else:
+            deviation = 0
             
-            if history.stddev_amount is None or history.stddev_amount == 0:
+            if history.stddev_amount is None:
                 z_score = None
+                
+            elif history.stddev_amount == 0:
+                z_score = 0
+                deviation = (item.amount_gross - history.mean_amount) / history.mean_amount
             else:
                 z_score = (item.amount_gross - history.mean_amount) / history.stddev_amount
                 
-            if z_score is not None and abs(z_score) >= settings.thresholds.default_z_score_threshold:
+            if z_score is not None and (
+                abs(z_score) >= settings.thresholds.default_z_score_threshold
+                or deviation >= settings.thresholds.default_history_dev_threshold
+            ):
                 anomalous_lines.append(
                     HistoricalStatsLine(
                         description=item.description,
