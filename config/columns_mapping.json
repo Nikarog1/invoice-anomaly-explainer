@@ -2,7 +2,7 @@
     "invoice_number": {
         "description": "Unique identifier assigned by the supplier to this invoice. Used for referencing, payment, and reconciliation. Every invoice must have one.",
         "possible_names": [
-            "invoice number", "invoice no", "inv no",
+            "invoice_number", "invoice number", "invoice no", "inv no",
             "cislo faktury", "c. faktury",
             "rechnungsnummer", "rechnungsnr",
             "numero de factura", "n factura",
@@ -12,17 +12,18 @@
     "supplier_name": {
         "description": "Legal name of the entity issuing the invoice — the seller, vendor, or service provider. Appears on the invoice as the party requesting payment.",
         "possible_names": [
-            "supplier", "supplier name", "vendor",
+            "supplier_name", "supplier", "supplier name", "vendor",
             "dodavatel", "nazev dodavatele",
             "lieferant", "lieferantenname",
             "proveedor", "nombre del proveedor",
             "fournisseur", "nom du fournisseur"
+            
         ]
     },
     "buyer_name": {
         "description": "Legal name of the entity receiving the invoice — the buyer, customer, or client. The party obligated to make payment.",
         "possible_names": [
-            "buyer", "customer", "client",
+            "buyer_name", "buyer", "customer", "client",
             "odberatel", "zakaznik",
             "kunde", "kaufer",
             "cliente", "comprador",
@@ -32,7 +33,7 @@
     "issue_date": {
         "description": "The date the invoice was created and issued by the supplier. Determines when the payment clock starts. Distinct from due date.",
         "possible_names": [
-            "issue date", "date of issue", "invoice date",
+            "issue_date", "issue date", "date of issue", "invoice date",
             "datum vystaveni",
             "ausstellungsdatum",
             "fecha de emision",
@@ -42,7 +43,7 @@
     "due_date": {
         "description": "The date by which payment must be received by the supplier. Late payment may incur penalties. Determined by payment terms relative to issue date.",
         "possible_names": [
-            "due date", "payment due", "payment deadline",
+            "due_date", "due date", "payment due", "payment deadline",
             "datum splatnosti",
             "falligkeitsdatum",
             "fecha de vencimiento",
@@ -52,7 +53,7 @@
     "total_amount": {
         "description": "The final amount owed by the buyer to the supplier for this entire invoice, typically inclusive of VAT. This is the amount that will be paid. Every invoice must have one.",
         "possible_names": [
-            "total", "total amount", "amount due", "invoice total",
+            "total_amount", "total", "total amount", "amount due", "invoice total",
             "celkem", "celkova castka",
             "gesamtbetrag", "summe",
             "importe total",
@@ -72,7 +73,7 @@
     "payment_details": {
         "description": "Banking or payment information needed to execute the payment — typically IBAN, account number, bank name, or payment reference. Used to verify payment routing matches the contract.",
         "possible_names": [
-            "payment details", "bank details", "payment information", "bank account",
+            "payment_details", "payment details", "bank details", "payment information", "bank account",
             "platebni udaje", "bankovni udaje",
             "zahlungsdetails", "bankverbindung",
             "detalles de pago", "informacion de pago",
@@ -103,7 +104,7 @@
     "unit_price": {
         "description": "The price charged per single unit of the product or service, excluding VAT. Multiplied by quantity to produce the net amount.",
         "possible_names": [
-            "unit price", "price per unit", "rate",
+            "unit_price", "unit price", "price per unit", "rate",
             "cena za jednotku", "jednotkova cena",
             "stuckpreis", "einzelpreis",
             "precio unitario", "precio por unidad",
@@ -113,7 +114,7 @@
     "amount_net": {
         "description": "The line item amount before VAT is applied. Equal to quantity multiplied by unit price. Represents the taxable base for this line.",
         "possible_names": [
-            "net amount", "subtotal", "amount excl vat", "net",
+            "amount_net", "net amount", "subtotal", "amount excl vat", "net",
             "castka bez dph", "mezisoucet", "zaklad dane",
             "nettobetrag", "netto",
             "importe neto", "base imponible",
@@ -123,7 +124,7 @@
     "amount_gross": {
         "description": "The line item amount after VAT is applied. This is what the buyer actually pays for this line. Equal to net amount plus VAT. Every line item must have one.",
         "possible_names": [
-            "gross amount", "total with tax", "amount incl vat", "gross",
+            "amount_gross", "gross amount", "total with tax", "amount incl vat", "gross",
             "castka s dph", "celkem s dph",
             "bruttobetrag", "brutto",
             "importe bruto", "total con iva",
@@ -133,7 +134,7 @@
     "vat_rate": {
         "description": "The percentage rate of value-added tax applied to this line item. Varies by product type and country — some goods are zero-rated or exempt. Applied to net amount to produce the VAT portion.",
         "possible_names": [
-            "vat", "vat rate", "tax rate", "vat %",
+            "vat_rate", "vat", "vat rate", "tax rate", "vat %",
             "dph", "sazba dph",
             "mwst", "mehrwertsteuer", "mwst satz",
             "iva", "tasa de iva",
