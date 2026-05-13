@@ -49,7 +49,7 @@ class ConcernEntry(BaseModel):
     
 class FlagGroup(BaseModel):
     theme: str
-    flags: list[ConcernEntry]
+    flag_names: list[str]
     
 class ExplanationPlan(BaseModel):
     """Step 1 LLM output. Structured analysis used to condition step 2 narrative."""
