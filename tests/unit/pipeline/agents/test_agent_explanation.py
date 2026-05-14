@@ -34,7 +34,8 @@ def _generate_state():
         invoice_count=0,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=[],
+        line_item_stats_amount=[],
+        line_item_stats_unit_price=[],
         is_degraded=True,
         degradation_reason=drh.no_history,
     )

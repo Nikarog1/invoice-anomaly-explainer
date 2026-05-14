@@ -8,7 +8,7 @@ from core.exceptions import PipelineStateError
 from pipeline.nodes.statistical_vs_history import statistical_vs_history
 from pipeline.state import PipelineState
 from schemas.anomaly import Severity, Source
-from schemas.history import DegradationReason, HistoricalSummary, LineItemStats
+from schemas.history import DegradationReason, HistoricalSummary, LineItemStatsAmount, LineItemStatsUnitPrice
 from schemas.invoice import InvoiceLineItem
 
 
@@ -19,15 +19,19 @@ def test_statistical_vs_history_returns_expected_output():
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
         InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=400.0),
     ]
-    line_item_stats = [
-        LineItemStats(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    ]
+    line_item_stats_unit = [
+        LineItemStatsUnitPrice(description="item1", mean_price=300, stddev_price=100, n_samples=10),
     ]
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=10,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=line_item_stats_unit,
         is_degraded=False,
         degradation_reason=None,
     )
@@ -42,7 +46,7 @@ def test_statistical_vs_history_returns_expected_output():
     
     assert len(flags) == 2
     
-    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "line_amount_deviation")
+    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "historical_deviation")
     assert flag_statistical.invoice_id == invoice_id
     assert flag_statistical.anomaly_severity == Severity.red
     assert flag_statistical.anomaly_source == Source.statistical_vs_history
@@ -55,7 +59,7 @@ def test_statistical_vs_history_returns_expected_output():
     
     anomalous_line = anomalous_lines[0]
     assert anomalous_line["description"] == "item1"
-    assert anomalous_line["amount_gross"] == 600.0
+    assert anomalous_line["amount"] == 600.0
     assert anomalous_line["historical_mean"] == 300.0
     assert anomalous_line["historical_stddev"] == 100.0
     assert math.isclose(anomalous_line["z_score"], 3.0, rel_tol=1e-4)
@@ -91,15 +95,16 @@ def test_statistical_vs_history_zscore_none_returns_nothing():
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
     ]
-    line_item_stats = [
-        LineItemStats(description="item1", mean_amount=300, stddev_amount=None, n_samples=1),
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=600, stddev_amount=None, n_samples=1),
     ]
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=1,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
         is_degraded=False,
         degradation_reason=None,
     )
@@ -120,15 +125,16 @@ def test_statistical_vs_history_returns_statistical_only():
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
     ]
-    line_item_stats = [
-        LineItemStats(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
     ]
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=10,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
         is_degraded=False,
         degradation_reason=None,
     )
@@ -144,7 +150,7 @@ def test_statistical_vs_history_returns_statistical_only():
     assert len(flags) == 1
     
     flag_statistical = flags[0]
-    assert flag_statistical.anomaly_name == "line_amount_deviation"
+    assert flag_statistical.anomaly_name == "historical_deviation"
 
 
 def test_statistical_vs_history_returns_unmatched_only():
@@ -152,15 +158,16 @@ def test_statistical_vs_history_returns_unmatched_only():
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=400.0),
     ]
-    line_item_stats = [
-        LineItemStats(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
     ]
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=10,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
         is_degraded=False,
         degradation_reason=None,
     )
@@ -185,15 +192,16 @@ def test_statistical_vs_history_degraded_history_returns_yellow_severity():
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
         InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=400.0),
     ]
-    line_item_stats = [
-        LineItemStats(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
     ]
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=10,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
         is_degraded=True,
         degradation_reason=DegradationReason.window_miss,
     )
@@ -208,7 +216,7 @@ def test_statistical_vs_history_degraded_history_returns_yellow_severity():
     
     assert len(flags) == 2
     
-    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "line_amount_deviation")
+    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "historical_deviation")
     assert flag_statistical.anomaly_severity == Severity.yellow
 
     flag_unmatched = next(flag for flag in flags if flag.anomaly_name == "unmatched_line_item")
@@ -221,13 +229,13 @@ def test_statistical_vs_history_degraded_with_no_history_returns_unmatched_only(
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
         InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=400.0),
     ]
-    line_item_stats = []
     historical_summary = HistoricalSummary(
         supplier_name="suppl1",
         invoice_count=10,
         fields_seen=set(),
         metadata_keys_seen=set(),
-        line_item_stats=line_item_stats,
+        line_item_stats_amount=[],
+        line_item_stats_unit_price=[],
         is_degraded=True,
         degradation_reason=DegradationReason.no_history,
     )

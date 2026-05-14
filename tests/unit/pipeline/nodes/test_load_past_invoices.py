@@ -112,9 +112,9 @@ def test_load_past_invoices_happy_path_returns_expected_output(fake_session) -> 
     assert summary.is_degraded is False
     assert summary.degradation_reason is None
     
-    assert len(summary.line_item_stats) == 2
+    assert len(summary.line_item_stats_amount) == 2
     
-    summary_item1 = [stats for stats in summary.line_item_stats if stats.description == "item1"][0]
+    summary_item1 = [stats for stats in summary.line_item_stats_amount if stats.description == "item1"][0]
     assert summary_item1.description == "item1"
     assert math.isclose(summary_item1.mean_amount, 600.0, rel_tol=1e-9)
     assert math.isclose(summary_item1.stddev_amount, 81.6496, rel_tol=1e-5) 

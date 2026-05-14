@@ -40,7 +40,8 @@ def test_completeness_check_historical_returns_expected_output():
             'invoice_line_item_id', "invoice_id", "description", "amount_gross", "vat_rate",
         ]),
         metadata_keys_seen=set(["Hist invoice field", "Common field"]),
-        line_item_stats=[],
+        line_item_stats_amount=[],
+        line_item_stats_unit_price=[],
         is_degraded=False,
         degradation_reason=None,
     )
@@ -111,7 +112,8 @@ def test_completeness_check_historical_returns_empty_list():
             'invoice_line_item_id', "invoice_id", "description", "amount_gross",
         ]),
         metadata_keys_seen=set(["Common field"]),
-        line_item_stats=[],
+        line_item_stats_amount=[],
+        line_item_stats_unit_price=[],
         is_degraded=False,
         degradation_reason=None,
     )
