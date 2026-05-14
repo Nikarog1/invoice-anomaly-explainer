@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     columns_mapping_path: Path = Path("./config/columns_mapping.json")
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout: float | int = 120
-    model_name: str = "mistral"
+    model_name: str = "llama3.1:8b"
     embedding_model_name: str = "nomic-embed-text"
     sqlite_url: str = "sqlite:///./data/data.db"
     checkpoint_path: str = "./data/checkpoints.db"

@@ -4,5 +4,5 @@ if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
     Write-Host "Install Ollama from https://ollama.com/download"
     exit 1
 }
-ollama pull mistral
+ollama pull llama3.1:8b
 ollama pull nomic-embed-text
