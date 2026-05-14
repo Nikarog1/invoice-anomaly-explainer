@@ -9,7 +9,7 @@ from config.settings import settings
 from data.sqlite import get_session
 from pipeline.state import PipelineState
 
-from schemas.history import DegradationReason, HistoricalSummary, LineItemStats
+from schemas.history import DegradationReason, HistoricalSummary, LineItemStatsAmount, LineItemStatsUnitPrice
 from schemas.invoice import Invoice, InvoiceLineItem
 from schemas.supplier_config import SupplierConfig
 
@@ -116,28 +116,47 @@ def load_past_invoices(state: PipelineState) -> dict:
         )
              
     fields_seen = set()
-    line_stats: dict[str, list[float]] = {}
+    line_stats_unit: dict[str, list[float]] = {}
+    line_stats_amount: dict[str, list[float]] = {}
     
     for line_item in historical_invoices_items:
         descr = line_item.description
         amount = line_item.amount_gross
+        unit_price = line_item.unit_price
         
         fields_seen.update(k for k, v in line_item.model_dump().items() if v is not None)
         
-        if descr in line_stats:
-            line_stats[descr].append(amount)
+        if unit_price is not None and descr in line_stats_unit:
+            line_stats_unit[descr].append(unit_price)
+            
+        elif unit_price is not None:
+            line_stats_unit[descr] = [unit_price]
+        
+        if descr in line_stats_amount:
+            line_stats_amount[descr].append(amount)
             
         else:
-            line_stats[descr] = [amount]
+            line_stats_amount[descr] = [amount]
      
-    results_line_item = []       
-    for line_item, amounts in line_stats.items():
-        results_line_item.append(
-            LineItemStats(
+    results_unit_price = []       
+    for line_item, unit_price in line_stats_unit.items():
+        results_unit_price.append(
+            LineItemStatsUnitPrice(
                 description=line_item,
-                mean_amount=sum(amounts) / len(amounts),
-                stddev_amount=stdev(amounts) if len(amounts) > 1 else None,
-                n_samples=len(amounts)
+                mean_price=sum(unit_price) / len(unit_price),
+                stddev_price=stdev(unit_price) if len(unit_price) > 1 else None,
+                n_samples=len(unit_price)
+            )
+        )
+    
+    results_amount_gross = []
+    for line_item, amount in line_stats_amount.items():
+        results_amount_gross.append(
+            LineItemStatsAmount(
+                description=line_item,
+                mean_amount=sum(amount) / len(amount),
+                stddev_amount=stdev(amount) if len(amount) > 1 else None,
+                n_samples=len(amount)
             )
         )
     
@@ -159,7 +178,8 @@ def load_past_invoices(state: PipelineState) -> dict:
         invoice_count=len(historical_invoices),
         fields_seen=fields_seen,
         metadata_keys_seen=metadata_keys_seen,
-        line_item_stats=results_line_item,
+        line_item_stats_amount=results_amount_gross,
+        line_item_stats_unit_price=results_unit_price,
         is_degraded=is_degraded,
         degradation_reason=degradation_reason,
     )
