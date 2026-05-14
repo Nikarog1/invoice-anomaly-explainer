@@ -3,7 +3,7 @@ from core.exceptions import PipelineStateError
 from core.logging import get_logger
 from pipeline.state import PipelineState
 from schemas.anomaly import AnomalyFlag, Severity, Source
-from schemas.history import HistoricalStatsLine, HistoricalStatsNotes, UnmatchedLineNotes
+from schemas.history import HistoricalStatsLine, HistoricalStatsNotes, PriceField, UnmatchedLineNotes
 
 logger = get_logger(__name__)
 
@@ -35,42 +35,60 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
     ):
         raise PipelineStateError("invoice_line_items or/and historical_summary")
     
-    line_item_stats = historical_summary.line_item_stats
+    line_item_stats_amount = historical_summary.line_item_stats_amount
+    line_item_stats_unit = historical_summary.line_item_stats_unit_price
     
     anomalous_lines = []
     unmatched_lines = set()
     
     for item in invoice_line_items:
-        history = next((line for line in line_item_stats if line.description == item.description), None)
+        history_amount = next((line for line in line_item_stats_amount if line.description == item.description), None)
+        history_unit = next((line for line in line_item_stats_unit if line.description == item.description), None)
         
-        if not history:
+        if not history_amount:
             unmatched_lines.add(item.description)
             
         else:
-            deviation = 0
+            unit = False
             
-            if history.stddev_amount is None:
+            current_price = item.amount_gross
+            history_price = history_amount.mean_amount
+            history_stddev = history_amount.stddev_amount
+            
+            if item.unit_price is not None and history_unit is not None:
+                unit = True
+                current_price = item.unit_price
+                history_price = history_unit.mean_price
+                history_stddev = history_unit.stddev_price
+                
+            deviation = (current_price - history_price) / history_price if history_price != 0 else None
+
+            if history_stddev is None:
                 z_score = None
                 
-            elif history.stddev_amount == 0:
+            elif history_stddev == 0 and history_price != 0:
                 z_score = 0
-                deviation = (item.amount_gross - history.mean_amount) / history.mean_amount
-            else:
-                z_score = (item.amount_gross - history.mean_amount) / history.stddev_amount
                 
-            if z_score is not None and (
-                abs(z_score) >= settings.thresholds.default_z_score_threshold
-                or deviation >= settings.thresholds.default_history_dev_threshold
-            ):
-                anomalous_lines.append(
-                    HistoricalStatsLine(
-                        description=item.description,
-                        amount_gross=item.amount_gross,
-                        historical_mean=history.mean_amount,
-                        historical_stddev=history.stddev_amount,
-                        z_score=z_score,
-                    )
-                )
+            elif history_stddev == 0:
+                z_score = None
+                
+            else:
+                z_score = (current_price - history_price) / history_stddev
+
+            flag_line = HistoricalStatsLine(
+                description=item.description,
+                price_field=PriceField.unit_price if unit else PriceField.amount_gross,
+                amount=current_price,
+                historical_mean=history_price,
+                historical_stddev=history_stddev,
+                z_score=z_score,
+                deviation=deviation,
+            )
+
+            if z_score is not None and abs(z_score) >= settings.thresholds.default_z_score_threshold:
+                anomalous_lines.append(flag_line)
+            elif deviation is not None and abs(deviation) >= settings.thresholds.default_history_dev_threshold:
+                anomalous_lines.append(flag_line)
                 
     flags = []
            
@@ -79,7 +97,7 @@ def statistical_vs_history(state: PipelineState) -> dict[str, list[AnomalyFlag]]
         flag_statistical = AnomalyFlag(
             anomaly_report_id=None,
             invoice_id=invoice_id,
-            anomaly_name="line_amount_deviation",
+            anomaly_name="historical_deviation",
             anomaly_severity=Severity.yellow if historical_summary.is_degraded else Severity.red,
             anomaly_source=Source.statistical_vs_history,
             anomaly_deviation=None,
