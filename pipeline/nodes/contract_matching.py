@@ -348,7 +348,8 @@ def _vector_match(
     
 
     for i, (id, distance) in enumerate(zip(query_result["ids"], query_result["distances"])):
-    
+        if not id:
+            continue
         matched_id = id[0]
         distance = distance[0]
         similarity = 1 - distance
