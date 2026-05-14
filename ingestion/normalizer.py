@@ -90,7 +90,7 @@ class Normalizer:
             unresolved_schema_fields = list(set(self._columns_mapping.keys()) - set(all_resolved.values()))
             unresolved_raw_fields = list(set(raw_columns) - set(all_resolved.keys()))
             
-            if unresolved_schema_fields or unresolved_raw_fields:
+            if unresolved_raw_fields:
                 try: 
                     mapping_llm = await self._llm_match_columns(
                         COLUMN_MAPPING_PROMPT,
@@ -350,7 +350,9 @@ class Normalizer:
         results = []
         for key, value in response_dict.items():
             
-            if value and value not in unresolved_schema_fields: # hallucination check 
+            if key not in unresolved_raw_fields: # ignore hallucinated raw column names
+                continue  
+            if value and value not in unresolved_schema_fields: # ignore hallucinated schema field names
                 value = None 
                 
             results.append(
