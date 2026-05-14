@@ -35,3 +35,15 @@ def fake_collection(fake_chroma_client):
         embedding_function=FakeEmbeddingFunction(),  # type: ignore
         configuration={"hnsw": {"space": "cosine"}},
     )
+
+@pytest.fixture(autouse=True)
+def block_llm(monkeypatch):
+    """Prevent unit tests from accidentally hitting Ollama."""
+    async def _skip(*args, **kwargs):
+        return None
+    
+    monkeypatch.setattr("data.llm_client.call_local_llm", _skip)
+    monkeypatch.setattr("ingestion.normalizer.call_local_llm", _skip)
+    monkeypatch.setattr("pipeline.agents.agent_explanation.call_local_llm", _skip)
+    monkeypatch.setattr("pipeline.nodes.contract_matching.call_local_llm", _skip)
+    monkeypatch.setattr("pipeline.nodes.contract_matching._llm_match", _skip)
