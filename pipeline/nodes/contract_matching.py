@@ -132,67 +132,70 @@ async def contract_matching(state: PipelineState) -> dict[str, list[AnomalyFlag]
     
     # VECTOR SEARCH
     vector_resolved = []
-    try:
-        matched_vector = _vector_match(
-            unresolved, 
-            contract_candidates,
-            invoice.supplier_name,
-            settings.thresholds.pipeline_vector_match_min,
-        )
-        
-        for inv_line_id, (contract_line, score) in matched_vector.items():
-            if contract_line:
-                results.append(
-                    LineItemMatch(
-                        contract_line_item_id=contract_line.contract_line_item_id, 
-                        invoice_line_item_id=inv_line_id,
-                        match_method=Method.vector,
-                        match_score=score
+    if unresolved:
+        try:
+            matched_vector = _vector_match(
+                unresolved, 
+                contract_candidates,
+                invoice.supplier_name,
+                settings.thresholds.pipeline_vector_match_min,
+            )
+            
+            for inv_line_id, (contract_line, score) in matched_vector.items():
+                if contract_line:
+                    results.append(
+                        LineItemMatch(
+                            contract_line_item_id=contract_line.contract_line_item_id, 
+                            invoice_line_item_id=inv_line_id,
+                            match_method=Method.vector,
+                            match_score=score
+                        )
                     )
-                )
-                inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
-                vector_resolved.append(
-                    MatchedPair(
-                        invoice_description=inv_line.description,
-                        matched_contract_name=contract_line.product_service_name,
-                        score=score
+                    inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
+                    vector_resolved.append(
+                        MatchedPair(
+                            invoice_description=inv_line.description,
+                            matched_contract_name=contract_line.product_service_name,
+                            score=score
+                        )
                     )
-                )
-                unresolved.remove(inv_line)
-        logger.info(f"Vector search resolved {len([r for r in results if r.match_method == Method.vector])} additional line items")
-    except (ConnectionError, ChromaError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
-        logger.warning(f"Skipping vector search, infrastructure unavailable: {e}")
+                    unresolved.remove(inv_line)
+            logger.info(f"Vector search resolved {len([r for r in results if r.match_method == Method.vector])} additional line items")
+        except (ConnectionError, ChromaError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+            logger.warning(f"Skipping vector search, infrastructure unavailable: {e}")
     
     # LLM MATCH
     llm_resolved = []
-    try:
-        matched_llm = await _llm_match(unresolved, contract_candidates)
-        
-        for inv_line_id, con_line_name in matched_llm.items():
-            if con_line_name:
-                contract = next(c for c in contract_candidates if c.product_service_name == con_line_name)
-                inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
+    if unresolved:
+        try:
+            matched_llm = await _llm_match(unresolved, contract_candidates)
+            
+            if matched_llm:
+                for inv_line_id, con_line_name in matched_llm.items():
+                    if con_line_name:
+                        contract = next(c for c in contract_candidates if c.product_service_name == con_line_name)
+                        inv_line = next(inv_line for inv_line in unresolved if inv_line.invoice_line_item_id == inv_line_id)
+                        
+                        results.append(
+                            LineItemMatch(
+                                contract_line_item_id=contract.contract_line_item_id, 
+                                invoice_line_item_id=inv_line.invoice_line_item_id,
+                                match_method=Method.llm,
+                                match_score=0.6
+                            )
+                        )
+                        llm_resolved.append(
+                            MatchedPair(
+                                invoice_description=inv_line.description,
+                                matched_contract_name=contract.product_service_name,
+                                score=0.6
+                            )
+                        )
+                        unresolved.remove(inv_line)
+                logger.info(f"LLM match resolved {len([r for r in results if r.match_method == Method.llm])} additional line items")
                 
-                results.append(
-                    LineItemMatch(
-                        contract_line_item_id=contract.contract_line_item_id, 
-                        invoice_line_item_id=inv_line.invoice_line_item_id,
-                        match_method=Method.llm,
-                        match_score=0.6
-                    )
-                )
-                llm_resolved.append(
-                    MatchedPair(
-                        invoice_description=inv_line.description,
-                        matched_contract_name=contract.product_service_name,
-                        score=0.6
-                    )
-                )
-                unresolved.remove(inv_line)
-        logger.info(f"LLM match resolved {len([r for r in results if r.match_method == Method.llm])} additional line items")
-        
-    except (ConnectionError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
-        logger.warning(f"Skipping LLM match, Ollama unavailable: {e}")
+        except (ConnectionError, httpx.HTTPError, httpx.ConnectError, httpx.TimeoutException) as e:
+            logger.warning(f"Skipping LLM match, Ollama unavailable: {e}")
         
             
     # DB WRITE
@@ -381,6 +384,9 @@ async def _llm_match(
 
     Returns dict description -> matched_name. Empty dict on no matches.
     """
+    
+    if not invoice_line_items:
+        return {}
     
     contract_names = [item.product_service_name for item in contract_line_items]
     inv_line_ids_descriptions = {str(item.invoice_line_item_id): item.description for item in invoice_line_items}
