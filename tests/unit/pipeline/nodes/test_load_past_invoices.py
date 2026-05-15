@@ -279,4 +279,44 @@ def test_load_past_invoices_fields_seen_doesnt_take_None_fields(fake_session) ->
     assert "payment_details" not in summary.fields_seen
     
 
+def test_load_past_invoices_returns_both_amount_gross_and_unit_price(fake_session) -> None:
+    state = _generate_state()
+    issue_date=date(2026, 3, 1)
+    
+    historical_invoices = [
+        Invoice(
+            invoice_number="hist_num1",
+            supplier_name="suppl1",
+            buyer_name="our_company",
+            total_amount=1000.0,
+            issue_date=issue_date
+        ),
+        Invoice(
+            invoice_number="hist_num2",
+            supplier_name="suppl1",
+            buyer_name="our_company",
+            total_amount=1200.0,
+            issue_date=issue_date
+        ),
+    ]
+    
+    historical_invoices_items = [
+        InvoiceLineItem(invoice_id=historical_invoices[0].invoice_id, description="item1", amount_gross=600.0, unit_price=600.0, quantity=1.0),
+        InvoiceLineItem(invoice_id=historical_invoices[0].invoice_id, description="item2", amount_gross=400.0, unit_price=None, quantity=None),
+        InvoiceLineItem(invoice_id=historical_invoices[1].invoice_id, description="item1", amount_gross=700.0, unit_price=700.0, quantity=1.0),
+        InvoiceLineItem(invoice_id=historical_invoices[1].invoice_id, description="item2", amount_gross=500.0, unit_price=None, quantity=None),
+    ]
+    
+    fake_session.add_all(historical_invoices)
+    fake_session.add_all(historical_invoices_items)
+    fake_session.commit()
+    
+    output = load_past_invoices(state)
+    summary = output["historical_summary"]
+    
+    assert len(summary.line_item_stats_amount) == 2
+    assert len(summary.line_item_stats_unit_price) == 1
+    
+
+
     

@@ -13,7 +13,7 @@ from schemas.invoice import InvoiceLineItem
 
 
 
-def test_statistical_vs_history_returns_expected_output():
+def test_statistical_vs_history_returns_expected_output() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
@@ -78,7 +78,7 @@ def test_statistical_vs_history_returns_expected_output():
     assert unmatched_lines[0] == "item2"
     
 
-def test_statistical_vs_history_raises_exception():
+def test_statistical_vs_history_raises_exception() -> None:
         
     state: PipelineState = {
         "invoice_id": uuid4(),
@@ -90,7 +90,7 @@ def test_statistical_vs_history_raises_exception():
         statistical_vs_history(state)
         
 
-def test_statistical_vs_history_zscore_none_returns_nothing():
+def test_statistical_vs_history_zscore_none_returns_nothing() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
@@ -120,7 +120,7 @@ def test_statistical_vs_history_zscore_none_returns_nothing():
     assert len(flags) == 0
     
 
-def test_statistical_vs_history_returns_statistical_only():
+def test_statistical_vs_history_returns_statistical_only() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
@@ -153,7 +153,7 @@ def test_statistical_vs_history_returns_statistical_only():
     assert flag_statistical.anomaly_name == "historical_deviation"
 
 
-def test_statistical_vs_history_returns_unmatched_only():
+def test_statistical_vs_history_returns_unmatched_only() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item2", amount_gross=400.0),
@@ -186,7 +186,7 @@ def test_statistical_vs_history_returns_unmatched_only():
     assert flag_unmatched.anomaly_name == "unmatched_line_item"
     
 
-def test_statistical_vs_history_degraded_history_returns_yellow_severity():
+def test_statistical_vs_history_degraded_history_returns_yellow_severity() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
@@ -223,7 +223,7 @@ def test_statistical_vs_history_degraded_history_returns_yellow_severity():
     assert flag_unmatched.anomaly_severity == Severity.yellow
     
 
-def test_statistical_vs_history_degraded_with_no_history_returns_unmatched_only():
+def test_statistical_vs_history_degraded_with_no_history_returns_unmatched_only() -> None:
     invoice_id = uuid4()
     invoice_line_items = [
         InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
@@ -261,3 +261,151 @@ def test_statistical_vs_history_degraded_with_no_history_returns_unmatched_only(
     assert len(unmatched_lines) == 2
     assert "item1" in unmatched_lines
     assert "item2" in unmatched_lines
+    
+
+def test_statistical_vs_history_stats_line_unit_price_used() -> None:
+    invoice_id = uuid4()
+    invoice_line_items = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0, unit_price=300.0),
+    ]
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=100, n_samples=10),
+    ]
+    line_item_stats_unit = [
+        LineItemStatsUnitPrice(description="item1", mean_price=100, stddev_price=10, n_samples=10),
+    ]
+    historical_summary = HistoricalSummary(
+        supplier_name="suppl1",
+        invoice_count=10,
+        fields_seen=set(),
+        metadata_keys_seen=set(),
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=line_item_stats_unit,
+        is_degraded=False,
+        degradation_reason=None,
+    )
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_items,
+        "historical_summary": historical_summary,
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_history(state)
+    flags = output["anomaly_flags"]
+    
+    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "historical_deviation")
+    assert flag_statistical.anomaly_notes is not None
+    notes_statistical = json.loads(flag_statistical.anomaly_notes)
+    
+    anomalous_lines = notes_statistical["anomalous_lines"]
+    assert len(anomalous_lines) == 1
+    
+    anomalous_line = anomalous_lines[0]
+    assert anomalous_line["historical_mean"] == 100.0
+    assert anomalous_line["historical_stddev"] == 10.0
+
+
+def test_statistical_vs_history_stats_line_zscore_none_deviation_used() -> None:
+    invoice_id = uuid4()
+    invoice_line_items = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
+    ]
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=None, n_samples=10),
+    ]
+    historical_summary = HistoricalSummary(
+        supplier_name="suppl1",
+        invoice_count=10,
+        fields_seen=set(),
+        metadata_keys_seen=set(),
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
+        is_degraded=False,
+        degradation_reason=None,
+    )
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_items,
+        "historical_summary": historical_summary,
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_history(state)
+    flags = output["anomaly_flags"]
+    
+    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "historical_deviation")
+    assert flag_statistical.anomaly_notes is not None
+    notes_statistical = json.loads(flag_statistical.anomaly_notes)
+    
+    anomalous_lines = notes_statistical["anomalous_lines"]
+    assert len(anomalous_lines) == 1
+    
+    anomalous_line = anomalous_lines[0]
+    assert anomalous_line["z_score"] is None
+    assert math.isclose(anomalous_line["deviation"], (600.0 - 300.0) / 300.0, rel_tol=1e-5)
+    
+
+def test_statistical_vs_history_stats_line_zscore_zero_deviation_used() -> None:
+    invoice_id = uuid4()
+    invoice_line_items = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
+    ]
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=300, stddev_amount=0, n_samples=10),
+    ]
+    historical_summary = HistoricalSummary(
+        supplier_name="suppl1",
+        invoice_count=10,
+        fields_seen=set(),
+        metadata_keys_seen=set(),
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
+        is_degraded=False,
+        degradation_reason=None,
+    )
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_items,
+        "historical_summary": historical_summary,
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_history(state)
+    flags = output["anomaly_flags"]
+    
+    flag_statistical = next(flag for flag in flags if flag.anomaly_name == "historical_deviation")
+    assert flag_statistical.anomaly_notes is not None
+    notes_statistical = json.loads(flag_statistical.anomaly_notes)
+    
+    anomalous_lines = notes_statistical["anomalous_lines"]
+    assert len(anomalous_lines) == 1
+    
+    anomalous_line = anomalous_lines[0]
+    assert anomalous_line["z_score"] == 0
+    assert math.isclose(anomalous_line["deviation"], (600.0 - 300.0) / 300.0, rel_tol=1e-5)
+    
+
+def test_statistical_vs_history_stats_line_price_zero_stddev_None() -> None:
+    invoice_id = uuid4()
+    invoice_line_items = [
+        InvoiceLineItem(invoice_id=invoice_id, description="item1", amount_gross=600.0),
+    ]
+    line_item_stats_amount = [
+        LineItemStatsAmount(description="item1", mean_amount=0, stddev_amount=None, n_samples=10),
+    ]
+    historical_summary = HistoricalSummary(
+        supplier_name="suppl1",
+        invoice_count=10,
+        fields_seen=set(),
+        metadata_keys_seen=set(),
+        line_item_stats_amount=line_item_stats_amount,
+        line_item_stats_unit_price=[],
+        is_degraded=False,
+        degradation_reason=None,
+    )
+    state: PipelineState = {
+        "invoice_id": invoice_id,
+        "invoice_line_items": invoice_line_items,
+        "historical_summary": historical_summary,
+    } # type: ignore[typeddict-item]
+    
+    output = statistical_vs_history(state)
+    assert len(output["anomaly_flags"]) == 0
