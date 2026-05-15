@@ -5,7 +5,6 @@ description = "Invoice anomaly explainer using agentic system"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "langgraph",
-    "langchain-ollama",
     "chromadb",
     "pydantic",
     "pydantic-settings",
@@ -14,11 +13,13 @@ dependencies = [
     "uvicorn",
     "sqlmodel",
     "langgraph-checkpoint-sqlite>=3.0.3",
+    "ollama>=0.6.2",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=7,<9",
+    "deptry==0.25.1",
     "pytest-asyncio>=0.23,<1",
     "ruff>=0.3,<1",
 ]
@@ -30,7 +31,7 @@ line-length = 88
 select = ["E", "F", "I"]
 
 [tool.pytest.ini_options]
-addopts = "-q"
+addopts = "-q -m 'not smoke'"
 asyncio_mode = "auto" # no need to manually decorate each async test
 filterwarnings = [
     "ignore:coroutine.*was never awaited:RuntimeWarning",
