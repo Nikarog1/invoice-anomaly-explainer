@@ -6,6 +6,14 @@ from pydantic import BaseModel
 
 
 
+class AnalysisJobCreateRequest(BaseModel):
+    force: bool = False
+
+class AnalysisJobCreated(BaseModel):
+    job_id: UUID
+    invoice_id: UUID
+    status: Literal["queued"]
+    
 class AnalysisJobResponse(BaseModel):
     job_id: UUID
     invoice_id: UUID
@@ -15,8 +23,3 @@ class AnalysisJobResponse(BaseModel):
     finished_at: datetime | None
     error_message: str | None
     anomaly_report_id: UUID | None
-    
-class AnalysisJobCreated(BaseModel):
-    job_id: UUID
-    invoice_id: UUID
-    status: Literal["queued"]
