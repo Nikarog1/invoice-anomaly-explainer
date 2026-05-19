@@ -45,7 +45,7 @@ async def call_local_llm(
 async def verify_ollama_reachable() -> httpx.Response | None:
     """
     GET {ollama_base_url}/api/tags.
-    Returns True if reachable, False otherwise.
+    Returns Response if reachable, None otherwise.
     Logs warning on failure.
     """
     ollama_url_enhanced = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
@@ -59,7 +59,12 @@ async def verify_ollama_reachable() -> httpx.Response | None:
         except (httpx.ConnectError, httpx.TimeoutException):
             logger.warning("Ollama is not reachable")
             return None
-    return response if response.status_code == 200 else None
+        
+    if response.status_code == 200:
+        return response
+    else:
+        logger.warning(f"Ollama returned status {response.status_code}")
+        return None
 
 
 async def verify_ollama_models() -> None:
@@ -74,15 +79,16 @@ async def verify_ollama_models() -> None:
         content = response.json()["models"]
         
         models_required = [settings.model_name, settings.embedding_model_name]
-        for model in content:
-            for model_r in list(models_required):
-                if model["name"].startswith(model_r):
-                    models_required.remove(model_r)
+        installed_names = [m["name"] for m in content]
+        missing = [
+            required for required in models_required
+            if not any(name.startswith(required) for name in installed_names)
+        ]
                 
-        if len(models_required):
+        if not missing:
             logger.info("All models are available")
         
         else:
-            logger.warning(f"Model{"" if len(models_required) == 1 else "s"} "
-                            f"not pulled: {models_required}"
+            logger.warning(f"Model{"" if len(missing) == 1 else "s"} "
+                            f"not pulled: {missing}"
             )
