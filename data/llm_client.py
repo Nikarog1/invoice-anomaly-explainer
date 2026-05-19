@@ -1,7 +1,11 @@
 import json
+import httpx
 from httpx import AsyncClient
 
 from config.settings import settings
+from core.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 
@@ -36,4 +40,49 @@ async def call_local_llm(
             return json.loads(content)
         else:
             return content
+        
+
+async def verify_ollama_reachable() -> httpx.Response | None:
+    """
+    GET {ollama_base_url}/api/tags.
+    Returns True if reachable, False otherwise.
+    Logs warning on failure.
+    """
+    ollama_url_enhanced = f"{settings.ollama_base_url.rstrip('/')}/api/tags"
+    async with AsyncClient(timeout=5) as client:
+        request = client.build_request(
+            "GET", 
+            ollama_url_enhanced, 
+        )
+        try:
+            response = await client.send(request)
+        except (httpx.ConnectError, httpx.TimeoutException):
+            logger.warning("Ollama is not reachable")
+            return None
+    return response if response.status_code == 200 else None
+
+
+async def verify_ollama_models() -> None:
+    """
+    Calls verify_ollama_reachable first.
+    If reachable, fetches /api/tags response, checks required models present.
+    Logs warning per missing model.
+    """
+    response = await verify_ollama_reachable()
     
+    if response:
+        content = response.json()["models"]
+        
+        models_required = [settings.model_name, settings.embedding_model_name]
+        for model in content:
+            for model_r in list(models_required):
+                if model["name"].startswith(model_r):
+                    models_required.remove(model_r)
+                
+        if len(models_required):
+            logger.info("All models are available")
+        
+        else:
+            logger.warning(f"Model{"" if len(models_required) == 1 else "s"} "
+                            f"not pulled: {models_required}"
+            )
