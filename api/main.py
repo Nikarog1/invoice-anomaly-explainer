@@ -32,5 +32,5 @@ register_exception_handlers(app)
 
 app.include_router(invoices.router)
 
-if __name__ == "main":
-    uvicorn.run("api.main::app", host=settings.fastapi_host, port=settings.fastapi_port, reload=True)
+if __name__ == "__main__":
+    uvicorn.run("api.main:app", host=settings.fastapi_host, port=settings.fastapi_port, reload=True)
