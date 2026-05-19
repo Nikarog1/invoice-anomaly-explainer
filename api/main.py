@@ -26,3 +26,11 @@ async def lifespan(app: FastAPI):
     yield
     
     logger.info("Shutting down")
+    
+app = FastAPI(title="invoice_anomaly_explainer", lifespan=lifespan)
+register_exception_handlers(app)
+
+app.include_router(invoices.router)
+
+if __name__ == "main":
+    uvicorn.run("api.main::app", host=settings.fastapi_host, port=settings.fastapi_port, reload=True)
