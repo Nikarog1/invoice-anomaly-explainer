@@ -7,10 +7,10 @@ from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
 from data.sqlite import get_session, load_invoice_from_sql
 
 
-router = APIRouter(prefix="/invoice", tags=["invoice"])
+router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 @router.get("/{invoice_id}")
-def get_invoice(invoice_id: UUID, session: Session = Depends(get_session)) -> InvoiceDTO:
+async def get_invoice(invoice_id: UUID, session: Session = Depends(get_session)) -> InvoiceDTO:
     invoice, invoice_line_items = load_invoice_from_sql(session, invoice_id)
     return InvoiceDTO(
         invoice_id=invoice_id,
