@@ -6,19 +6,27 @@ import pytest
 import chromadb
 from chromadb.config import Settings
 
-from sqlmodel import Session, SQLModel
+from sqlalchemy.pool import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
-from data.sqlite import engine, create_db_and_tables
+import data.sqlite as sqlite_module
 from tests.unit.data.test_vector_store import FakeEmbeddingFunction
 
 
 
+_test_engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+sqlite_module.engine = _test_engine
+
 @pytest.fixture
 def fake_session():
-    create_db_and_tables()
-    with Session(engine) as session:    
+    SQLModel.metadata.create_all(_test_engine)
+    with Session(_test_engine) as session:
         yield session
-    SQLModel.metadata.drop_all(engine)
+    SQLModel.metadata.drop_all(_test_engine)
     
 
 @pytest.fixture
