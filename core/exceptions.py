@@ -58,4 +58,11 @@ class ExplanationFailedError(Exception):
     def __init__(self, reason: str):
         self.reason = reason
         super().__init__(f"Explanation failed: {reason}")
+        
+class JobNotFoundError(Exception):
+    """Raised when provided job_id is not found in database."""
+
+    def __init__(self, job_id: UUID) -> None:
+        self.job_id = job_id
+        super().__init__(f"Job with id {job_id} not found in database.")
     
