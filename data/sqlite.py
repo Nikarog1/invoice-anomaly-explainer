@@ -4,7 +4,7 @@ from uuid import UUID
 from sqlmodel import select, Session, SQLModel, create_engine
 
 from config.settings import settings
-from core.exceptions import InvoiceNotFoundError
+from core.exceptions import JobNotFoundError, InvoiceNotFoundError
 
 from schemas.anomaly import AnomalyFlag, AnomalyReport
 from schemas.columns_mapping import ColumnMapping
@@ -32,4 +32,11 @@ def load_invoice_from_sql(session: Session, invoice_id: UUID) -> tuple[Invoice, 
     ).all()
         
     return invoice, list(invoice_line_items)
+
+def load_ingestion_job(session: Session, job_id: UUID) -> IngestionJob:
+    ingestion_job = session.get(IngestionJob, job_id)
+    if ingestion_job is None:
+        raise JobNotFoundError(job_id)
+        
+    return ingestion_job
         
