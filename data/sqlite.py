@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from uuid import UUID
 
-from sqlmodel import select, Session, SQLModel, create_engine
+from sqlmodel import create_engine, desc, select, Session, SQLModel
 
 from config.settings import settings
 from core.exceptions import JobNotFoundError, InvoiceNotFoundError
@@ -46,4 +46,19 @@ def load_analysis_job(session: Session, job_id: UUID) -> AnalysisJob:
         raise JobNotFoundError(job_id)
         
     return analysis_job
-        
+
+def invoice_exists(session: Session, invoice_id: UUID) -> bool:
+    if session.get(Invoice, invoice_id):
+        return True
+    return False
+    
+def load_latest_analysis_job(session: Session, invoice_id: UUID, status: str | None) -> AnalysisJob | None:
+    query = (
+        select(AnalysisJob)
+        .where(AnalysisJob.invoice_id == invoice_id)
+        .order_by(desc(AnalysisJob.created_at))
+    )
+    if status:
+        query = query.where(AnalysisJob.status == status)
+
+    return session.exec(query).first()
