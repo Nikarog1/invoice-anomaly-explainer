@@ -12,6 +12,7 @@ router = APIRouter(prefix="/analysis-jobs", tags=["analysis-jobs"])
 
 @router.get("/{job_id}")
 async def get_analysis_job(job_id: UUID, session: Session = Depends(get_session)) -> AnalysisJobResponse:
+    """Fetch analysis job state by job id."""
     job = load_analysis_job(session, job_id)
     return AnalysisJobResponse(
         job_id=job.job_id,

@@ -11,6 +11,7 @@ router = APIRouter(prefix="/invoices", tags=["invoices"])
 
 @router.get("/{invoice_id}")
 async def get_invoice(invoice_id: UUID, session: Session = Depends(get_session)) -> InvoiceDTO:
+    """Fetch invoice header and line items by id."""
     invoice, invoice_line_items = load_invoice_from_sql(session, invoice_id)
     return InvoiceDTO(
         invoice_id=invoice_id,

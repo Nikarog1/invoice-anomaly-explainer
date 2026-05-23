@@ -12,6 +12,7 @@ router = APIRouter(prefix="/ingestion-jobs", tags=["ingestion-jobs"])
 
 @router.get("/{job_id}")
 async def get_ingestion_job(job_id: UUID, session: Session = Depends(get_session)) -> IngestionJobResponse:
+    """Fetch ingestion job state by job id."""
     job = load_ingestion_job(session, job_id)
     return IngestionJobResponse(
         job_id=job.job_id,
