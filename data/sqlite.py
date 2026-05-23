@@ -62,3 +62,10 @@ def load_latest_analysis_job(session: Session, invoice_id: UUID, status: str | N
         query = query.where(AnalysisJob.status == status)
 
     return session.exec(query).first()
+
+def load_anomaly_flags(session: Session, anomaly_report_id: UUID) -> list[AnomalyFlag]:
+    flags = session.exec(
+        select(AnomalyFlag)
+        .where(AnomalyFlag.anomaly_report_id == anomaly_report_id)
+    ).all()
+    return list(flags)
