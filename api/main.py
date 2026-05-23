@@ -3,7 +3,7 @@ from fastapi import FastAPI
 import uvicorn
 
 from api.exception_handlers import register_exception_handlers
-from api.routes import ingestion_jobs, invoices
+from api.routes import analysis_jobs, ingestion_jobs, invoices
 
 from config.settings import settings
 from core.logging import get_logger
@@ -27,11 +27,12 @@ async def lifespan(app: FastAPI):
     
     logger.info("Shutting down")
     
-app = FastAPI(title="invoice_anomaly_explainer", lifespan=lifespan)
+app = FastAPI(title="invoice-anomaly-explainer", lifespan=lifespan)
 register_exception_handlers(app)
 
 app.include_router(invoices.router)
 app.include_router(ingestion_jobs.router)
+app.include_router(analysis_jobs.router)
 
 if __name__ == "__main__":
     uvicorn.run("api.main:app", host=settings.fastapi_host, port=settings.fastapi_port, reload=True)
