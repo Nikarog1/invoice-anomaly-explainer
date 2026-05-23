@@ -39,4 +39,11 @@ def load_ingestion_job(session: Session, job_id: UUID) -> IngestionJob:
         raise JobNotFoundError(job_id)
         
     return ingestion_job
+
+def load_analysis_job(session: Session, job_id: UUID) -> AnalysisJob:
+    analysis_job = session.get(AnalysisJob, job_id)
+    if analysis_job is None:
+        raise JobNotFoundError(job_id)
+        
+    return analysis_job
         
