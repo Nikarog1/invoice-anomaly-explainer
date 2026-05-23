@@ -1,11 +1,25 @@
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
 from sqlmodel import Session
 
 from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
-from data.sqlite import get_session, load_invoice_from_sql
+from api.models.reports import AnomalyFlagDTO, AnomalyReportDTO, ReportResponse
+from core.exceptions import InvoiceNotFoundError
+from data.sqlite import (
+    get_session, invoice_exists, load_anomaly_flags, load_invoice_from_sql, load_latest_analysis_job,
+)
+from schemas.anomaly import AnomalyReport
 
+
+
+STATUS_MAP = {
+    "queued": "analyzing",
+    "running": "analyzing",
+    "succeeded": "ready",
+    "failed": "failed",
+}
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
 
@@ -37,3 +51,49 @@ async def get_invoice(invoice_id: UUID, session: Session = Depends(get_session))
             for line in invoice_line_items
         ]
     )
+
+
+@router.get("/{invoice_id}/report")
+async def get_anomaly_report(invoice_id: UUID, session: Session = Depends(get_session)) -> ReportResponse:
+    """Fetch anomaly report by invoice id."""
+    if not invoice_exists(session, invoice_id):
+        raise InvoiceNotFoundError(invoice_id)
+
+    latest_job = load_latest_analysis_job(session, invoice_id, None)
+    if latest_job is None:
+        return ReportResponse(status="not_analyzed", report=None, error_message=None)
+
+    status = STATUS_MAP[latest_job.status]
+    error_message = latest_job.error_message if latest_job.status == "failed" else None
+
+    report_dto: AnomalyReportDTO | None = None
+
+    latest_success_job = load_latest_analysis_job(session, invoice_id, "succeeded")
+    if latest_success_job and latest_success_job.anomaly_report_id:
+        report = session.get(AnomalyReport, latest_success_job.anomaly_report_id)
+        if report is None:
+            raise RuntimeError(
+                f"Integrity violation: succeeded job {latest_success_job.job_id} "
+                f"references missing report {latest_success_job.anomaly_report_id}"
+            )
+
+        flags = load_anomaly_flags(session, report.anomaly_report_id)
+        report_dto = AnomalyReportDTO(
+            anomaly_report_id=report.anomaly_report_id,
+            invoice_id=invoice_id,
+            anomalies_count=report.anomalies_count,
+            agent_explanation=report.agent_explanation, # type: ignore[arg-type]
+            explanation_date=report.explanation_date, # type: ignore[arg-type]
+            flags=[
+                AnomalyFlagDTO(
+                    name=flag.anomaly_name,
+                    severity=flag.anomaly_severity,
+                    source=flag.anomaly_source,
+                    deviation=flag.anomaly_deviation,
+                    notes=json.loads(flag.anomaly_notes) if flag.anomaly_notes else None,
+                )
+                for flag in flags
+            ],
+        )
+
+    return ReportResponse(status=status, report=report_dto, error_message=error_message) # type: ignore[arg-type]
