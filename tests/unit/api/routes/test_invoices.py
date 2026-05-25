@@ -1,7 +1,10 @@
+from datetime import datetime, timezone
+import json
 from uuid import uuid4, UUID
 
 import pytest
 
+from schemas.anomaly import AnomalyFlag, AnomalyReport, Severity, Source
 from schemas.invoice import Invoice, InvoiceLineItem
 from schemas.jobs import AnalysisJob
 
@@ -116,3 +119,70 @@ def test_get_anomaly_report_raises_exception_successful_response_no_report(clien
 
     with pytest.raises(RuntimeError):
         client.get(f"/invoices/{invoice.invoice_id}/report")
+        
+
+def test_get_anomaly_report_happy_path(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    invoice_id = invoice.invoice_id
+    
+    report = AnomalyReport(
+        invoice_id=invoice_id,
+        anomalies_count=2,
+        agent_explanation="Some explanation",
+        explanation_date=datetime(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
+    )
+    report_id = report.anomaly_report_id
+    
+    flags = [
+        AnomalyFlag(
+            anomaly_report_id=report_id,
+            invoice_id=invoice_id,
+            anomaly_name="name1",
+            anomaly_severity=Severity.yellow,
+            anomaly_source=Source.completeness_check_ingestion,
+            anomaly_deviation=None,
+            anomaly_notes=json.dumps({"key1": 0.1, "key2": "abc"})
+        ),
+        AnomalyFlag(
+            anomaly_report_id=report_id,
+            invoice_id=invoice_id,
+            anomaly_name="name2",
+            anomaly_severity=Severity.red,
+            anomaly_source=Source.statistical_vs_contract,
+            anomaly_deviation=None,
+            anomaly_notes=None,
+        ),
+    ]
+    latest_job = _generate_analysis_job(invoice_id, status="running", error_message="Some message")
+    latest_success_job = _generate_analysis_job(invoice_id, status="succeeded", anomaly_report_id=report_id)
+    
+    fake_session.add(invoice)
+    fake_session.add(report)
+    fake_session.add_all(flags)
+    fake_session.add(latest_job)
+    fake_session.add(latest_success_job)
+    fake_session.commit()
+
+    response = client.get(f"/invoices/{invoice_id}/report")
+    
+    assert response.status_code == 200
+    
+    response_json = response.json()
+    assert response_json["status"] == "analyzing"
+    assert response_json["error_message"] is None
+    
+    report = response_json["report"]
+    assert report["anomaly_report_id"] == str(report_id)
+    assert report["invoice_id"] == str(invoice_id)
+    assert report["anomalies_count"] == 2
+    assert report["agent_explanation"] == "Some explanation"
+    assert report["explanation_date"] == "2026-04-01T12:00:00"
+    assert len(report["flags"]) == 2
+    
+    flag_0 = report["flags"][0]
+    assert flag_0["name"] == "name1"
+    assert flag_0["severity"] == "yellow"
+    assert flag_0["source"] == "completeness_check_ingestion"
+    assert flag_0["deviation"] is None
+    assert len(flag_0["notes"]) == 2
+    assert flag_0["notes"]["key1"] == 0.1
