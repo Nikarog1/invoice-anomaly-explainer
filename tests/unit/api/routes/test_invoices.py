@@ -1,6 +1,7 @@
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from schemas.invoice import Invoice, InvoiceLineItem
+from schemas.jobs import AnalysisJob
 
 
 
@@ -19,6 +20,19 @@ def _generate_invoice_with_lines() -> tuple[Invoice, InvoiceLineItem]:
         amount_gross=500.0,
     )
     return invoice, invoice_line_item
+
+def _generate_analysis_job(
+        invoice_id: UUID, 
+        status: str, 
+        anomaly_report_id: UUID = uuid4(), 
+        error_message: str | None = None
+) -> AnalysisJob:
+    return AnalysisJob(
+        anomaly_report_id=anomaly_report_id,
+        invoice_id=invoice_id,
+        status=status,
+        error_message=error_message,
+    )
 
     
 
@@ -70,4 +84,22 @@ def test_get_anomaly_report_no_latest_job_empty_response(client, fake_session) -
     assert response_json["status"] == "not_analyzed"
     assert response_json["report"] is None
     assert response_json["error_message"] is None
+    
+
+def test_get_anomaly_report_error_message_failed_last_job(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    job = _generate_analysis_job(invoice.invoice_id, status="failed", error_message="Some message")
+    
+    fake_session.add(invoice)
+    fake_session.add(job)
+    fake_session.commit()
+
+    response = client.get(f"/invoices/{invoice.invoice_id}/report")
+    
+    assert response.status_code == 200
+    
+    response_json = response.json()
+    assert response_json["status"] == "failed"
+    assert response_json["report"] is None
+    assert response_json["error_message"] == "Some message"
     
