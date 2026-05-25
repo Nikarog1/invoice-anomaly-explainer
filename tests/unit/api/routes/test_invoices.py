@@ -1,5 +1,7 @@
 from uuid import uuid4, UUID
 
+import pytest
+
 from schemas.invoice import Invoice, InvoiceLineItem
 from schemas.jobs import AnalysisJob
 
@@ -103,3 +105,14 @@ def test_get_anomaly_report_error_message_failed_last_job(client, fake_session) 
     assert response_json["report"] is None
     assert response_json["error_message"] == "Some message"
     
+
+def test_get_anomaly_report_raises_exception_successful_response_no_report(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    job = _generate_analysis_job(invoice.invoice_id, status="succeeded")
+    
+    fake_session.add(invoice)
+    fake_session.add(job)
+    fake_session.commit()
+
+    with pytest.raises(RuntimeError):
+        client.get(f"/invoices/{invoice.invoice_id}/report")
