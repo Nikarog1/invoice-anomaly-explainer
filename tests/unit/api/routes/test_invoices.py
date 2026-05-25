@@ -4,7 +4,7 @@ from schemas.invoice import Invoice, InvoiceLineItem
 
 
 
-def test_get_invoice_returns_dto_when_invoice_exists(client, fake_session):
+def _generate_invoice_with_lines() -> tuple[Invoice, InvoiceLineItem]:
     invoice = Invoice(
         invoice_number="12345",
         supplier_name="suppl1",
@@ -18,6 +18,12 @@ def test_get_invoice_returns_dto_when_invoice_exists(client, fake_session):
         description="item1",
         amount_gross=500.0,
     )
+    return invoice, invoice_line_item
+
+    
+
+def test_get_invoice_returns_dto_when_invoice_exists(client, fake_session) -> None:
+    invoice, invoice_line_item = _generate_invoice_with_lines()
     fake_session.add(invoice)
     fake_session.add(invoice_line_item)
     fake_session.commit()
@@ -32,10 +38,36 @@ def test_get_invoice_returns_dto_when_invoice_exists(client, fake_session):
     assert body["line_items"][0]["description"] == "item1"
 
 
-def test_get_invoice_returns_404_when_invoice_missing(client):
+def test_get_invoice_returns_404_when_invoice_missing(client) -> None:
     missing_id = uuid4()
 
     response = client.get(f"/invoices/{missing_id}")
 
     assert response.status_code == 404
     assert response.json()["detail"] == f"Invoice {missing_id} not found"
+    
+
+
+def test_get_anomaly_report_returns_404_when_invoice_missing(client) -> None:
+    missing_id = uuid4()
+
+    response = client.get(f"/invoices/{missing_id}/report")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == f"Invoice {missing_id} not found"
+
+
+def test_get_anomaly_report_no_latest_job_empty_response(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    fake_session.add(invoice)
+    fake_session.commit()
+
+    response = client.get(f"/invoices/{invoice.invoice_id}/report")
+    
+    assert response.status_code == 200
+    
+    response_json = response.json()
+    assert response_json["status"] == "not_analyzed"
+    assert response_json["report"] is None
+    assert response_json["error_message"] is None
+    
