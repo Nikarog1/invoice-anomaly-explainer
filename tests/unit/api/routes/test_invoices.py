@@ -91,7 +91,7 @@ def test_get_anomaly_report_no_latest_job_empty_response(client, fake_session) -
     assert response_json["error_message"] is None
     
 
-def test_get_anomaly_report_error_message_failed_last_job(client, fake_session) -> None:
+def test_get_anomaly_report_returns_failed_status_with_error_message (client, fake_session) -> None:
     invoice, _ = _generate_invoice_with_lines()
     job = _generate_analysis_job(invoice.invoice_id, status="failed", error_message="Some message")
     
@@ -171,15 +171,15 @@ def test_get_anomaly_report_happy_path(client, fake_session) -> None:
     assert response_json["status"] == "analyzing"
     assert response_json["error_message"] is None
     
-    report = response_json["report"]
-    assert report["anomaly_report_id"] == str(report_id)
-    assert report["invoice_id"] == str(invoice_id)
-    assert report["anomalies_count"] == 2
-    assert report["agent_explanation"] == "Some explanation"
-    assert report["explanation_date"] == "2026-04-01T12:00:00"
-    assert len(report["flags"]) == 2
+    response_report = response_json["report"]
+    assert response_report["anomaly_report_id"] == str(report_id)
+    assert response_report["invoice_id"] == str(invoice_id)
+    assert response_report["anomalies_count"] == 2
+    assert response_report["agent_explanation"] == "Some explanation"
+    assert response_report["explanation_date"] == "2026-04-01T12:00:00"
+    assert len(response_report["flags"]) == 2
     
-    flag_0 = report["flags"][0]
+    flag_0 = response_report["flags"][0]
     assert flag_0["name"] == "name1"
     assert flag_0["severity"] == "yellow"
     assert flag_0["source"] == "completeness_check_ingestion"
