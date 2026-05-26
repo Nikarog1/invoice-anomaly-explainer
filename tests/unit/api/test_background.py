@@ -1,7 +1,7 @@
 import csv
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
-from uuid import uuid4, UUID
+from uuid import uuid4
 
 from sqlmodel import Session
 
@@ -130,3 +130,28 @@ async def test_run_ingestion_partial_success(tmp_path: Path, fake_session: Sessi
     assert file_fail
     assert file_fail["filename"] == path_fail.name
     assert file_fail["status"] == "failed"
+    
+
+async def test_run_ingestion_job_level_crash(tmp_path: Path, fake_session: Session) -> None:
+    job = IngestionJob(file_results=[])
+    job_id = job.job_id
+    fake_session.add(job)
+    fake_session.commit()
+    
+    path = tmp_path / "data.csv"
+    path.write_text("anything")
+    
+    mock_service = AsyncMock()
+    mock_service.run.side_effect  = RuntimeError("outer_exception")
+    
+    with patch(
+        "api.background.IngestionService",
+        return_value=mock_service,
+    ):
+        await run_ingestion(job_id, file_paths=[path])
+    
+    upd_job = fake_session.get(IngestionJob, job_id)
+    assert upd_job
+    assert upd_job.status == "failed"
+    assert upd_job.error_message
+    assert str("outer_exception") in upd_job.error_message
