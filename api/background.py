@@ -4,8 +4,7 @@ from uuid import UUID
 
 from api.models.ingestion_jobs import FileResult
 from core.exceptions import (
-    JobNotFoundError, IngestionRepositoryError,
-    InvalidCSVError, InvoiceMappingNotFoundError,
+    IngestionRepositoryError, InvalidCSVError, InvoiceMappingNotFoundError,
 )
 from core.logging import get_logger
 from data.sqlite import get_session
@@ -17,19 +16,24 @@ logger = get_logger(__name__)
 
 
 async def run_ingestion(job_id: UUID, file_paths: list[Path]) -> None:
-    """Background function to run ingestion service."""
+    """
+    Run ingestion for each uploaded file, updating job status as it progresses.
+
+    Per-file failures are captured in file_results without halting the job.
+    Job-level exceptions mark the entire job as failed.
+    """
     with get_session() as session:
         try:
-            session.rollback()
-            
             n_files = len(file_paths)
             logger.info(f"Starting ingestion job {job_id} with {n_files} "
                         f"file{"" if n_files == 1 else "s"}"
             )
+            
             job = session.get(IngestionJob, job_id)
             if not job:
                 logger.error(f"Job {job_id} not found")
-                raise JobNotFoundError(job_id)
+                return
+            
             job.status = "running"
             job.started_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
             session.commit()
@@ -63,7 +67,7 @@ async def run_ingestion(job_id: UUID, file_paths: list[Path]) -> None:
                             error_message=str(e),
                         ).model_dump(mode="json")
                     )
-                    logger.warning(f"File failed: {path.name}")
+                    logger.warning(f"File failed: {path.name} - {e}")
                     
             successes = sum(1 for result in file_results if result["status"]=="succeeded")
             if successes == len(file_results):
@@ -85,10 +89,12 @@ async def run_ingestion(job_id: UUID, file_paths: list[Path]) -> None:
         except Exception as e:
             logger.exception(f"Job {job_id} crashed unexpectedly")
             
+            session.rollback()
+            
             job = session.get(IngestionJob, job_id)
             if not job:
                 logger.error(f"Job {job_id} not found")
-                raise JobNotFoundError(job_id)
+                return
             
             job.status = "failed"
             job.finished_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
