@@ -107,7 +107,7 @@ async def get_anomaly_report(invoice_id: UUID, session: Session = Depends(get_se
 
 
 @router.post("", status_code=202)
-async def upload_file(files: list[UploadFile]) -> IngestionJobCreated:
+async def upload_file(files: list[UploadFile], session: Session = Depends(get_session)) -> IngestionJobCreated:
     """Some doc string"""
     
     job = IngestionJob(file_results=[]) 
@@ -116,28 +116,28 @@ async def upload_file(files: list[UploadFile]) -> IngestionJobCreated:
     paths = []
 
     for i, file in enumerate(files):
-        if not file or not file.filename:
-            raise InvalidCSVError("None")
+        if not file.filename:
+            raise 
         
-        bytes = await file.read()
+        file_bytes = await file.read()
         
         if not file.filename.lower().endswith(".csv"):
             raise InvalidCSVError(file.filename)
         
-        if not CSVParser.is_csv(bytes):
+        if not CSVParser.is_csv(file_bytes):
             raise InvalidCSVError(file.filename)
         
         csv_name = f"{i}_{file.filename}"
         path = file_dir / Path(csv_name)
+        
         with open(path, "wb") as f:
-            f.write(bytes)
-            paths.append(path)
+            f.write(file_bytes)
+        paths.append(path)
             
     
-    with get_session() as session:
-        session.add(job)
-        session.commit()
+    session.add(job)
+    session.commit()
         
     asyncio.create_task(run_ingestion(job.job_id, paths))
     
-    return IngestionJobCreated(job.job_id, status="queued")
+    return IngestionJobCreated(job_id=job.job_id, status="queued")  
