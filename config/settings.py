@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
     )
+    csv_dir: Path = Path("./data/uploads/")
     columns_mapping_path: Path = Path("./config/columns_mapping.json")
     ollama_base_url: str = "http://localhost:11434"
     ollama_timeout: float | int = 120
