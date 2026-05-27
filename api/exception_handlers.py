@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from core.exceptions import (
-    JobNotFoundError, InvoiceNotFoundError
+    JobNotFoundError, InvalidCSVError, InvoiceNotFoundError,
 )
 
 
@@ -19,6 +19,13 @@ def job_not_found_error_handler(request: Request, exc: JobNotFoundError):
         content={"detail": f"Job {exc.job_id} not found"},
     )
 
+def invalid_csv_error_handler(request: Request, exc: InvalidCSVError):
+    return JSONResponse(
+        status_code=404,
+        content={"detail": f"Invalid csv format: {exc.path}"},
+    )
+
 def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(InvoiceNotFoundError, invoice_not_found_error_handler) # type: ignore[arg-type]
     app.add_exception_handler(JobNotFoundError, job_not_found_error_handler) # type: ignore[arg-type]
+    app.add_exception_handler(InvalidCSVError, invalid_csv_error_handler) # type: ignore[arg-type]
