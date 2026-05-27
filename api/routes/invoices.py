@@ -1,16 +1,23 @@
+import asyncio
 import json
+from pathlib import Path
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends, File, APIRouter,  UploadFile
 from sqlmodel import Session
 
+from api.background import run_ingestion
+from api.models.ingestion_jobs import IngestionJobCreated
 from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
 from api.models.reports import AnomalyFlagDTO, AnomalyReportDTO, ReportResponse
-from core.exceptions import InvoiceNotFoundError
+from config.settings import settings
+from core.exceptions import InvalidCSVError, InvoiceNotFoundError
 from data.sqlite import (
     get_session, invoice_exists, load_anomaly_flags, load_invoice_from_sql, load_latest_analysis_job,
 )
+from ingestion.csv_parser import CSVParser
 from schemas.anomaly import AnomalyReport
+from schemas.jobs import IngestionJob
 
 
 
@@ -97,3 +104,40 @@ async def get_anomaly_report(invoice_id: UUID, session: Session = Depends(get_se
         )
 
     return ReportResponse(status=status, report=report_dto, error_message=error_message) # type: ignore[arg-type]
+
+
+@router.post("", status_code=202)
+async def upload_file(files: list[UploadFile]) -> IngestionJobCreated:
+    """Some doc string"""
+    
+    job = IngestionJob(file_results=[]) 
+    file_dir = Path(settings.csv_dir / str(job.job_id))
+    file_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+
+    for i, file in enumerate(files):
+        if not file or not file.filename:
+            raise InvalidCSVError("None")
+        
+        bytes = await file.read()
+        
+        if not file.filename.lower().endswith(".csv"):
+            raise InvalidCSVError(file.filename)
+        
+        if not CSVParser.is_csv(bytes):
+            raise InvalidCSVError(file.filename)
+        
+        csv_name = f"{i}_{file.filename}"
+        path = file_dir / Path(csv_name)
+        with open(path, "wb") as f:
+            f.write(bytes)
+            paths.append(path)
+            
+    
+    with get_session() as session:
+        session.add(job)
+        session.commit()
+        
+    asyncio.create_task(run_ingestion(job.job_id, paths))
+    
+    return IngestionJobCreated(job.job_id, status="queued")
