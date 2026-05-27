@@ -1,9 +1,8 @@
 import asyncio
 import json
-from pathlib import Path
 from uuid import UUID
 
-from fastapi import Depends, File, APIRouter,  UploadFile
+from fastapi import Depends, APIRouter,  UploadFile
 from sqlmodel import Session
 
 from api.background import run_ingestion
@@ -12,12 +11,15 @@ from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
 from api.models.reports import AnomalyFlagDTO, AnomalyReportDTO, ReportResponse
 from config.settings import settings
 from core.exceptions import InvalidCSVError, InvoiceNotFoundError
+from core.logging import get_logger
 from data.sqlite import (
     get_session, invoice_exists, load_anomaly_flags, load_invoice_from_sql, load_latest_analysis_job,
 )
 from ingestion.csv_parser import CSVParser
 from schemas.anomaly import AnomalyReport
 from schemas.jobs import IngestionJob
+
+logger = get_logger(__name__)
 
 
 
@@ -116,6 +118,8 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
     task. Returns immediately with the job id for status polling.
     """
 
+    validated: list[tuple[str, bytes]] = []
+    
     for file in files: # check files first
         if not file.filename:
             raise InvalidCSVError("unnamed file")
@@ -127,17 +131,19 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
         
         if not CSVParser.is_csv(file_bytes):
             raise InvalidCSVError(file.filename)
+        
+        validated.append((file.filename, file_bytes))
     
 
     job = IngestionJob(file_results=[]) 
     file_dir = settings.csv_dir / str(job.job_id)
-    file_dir.mkdir(parents=True, exist_ok=True)
+    file_dir.mkdir(parents=True, exist_ok=False)
     paths = []
     
-    for i, file in enumerate(files): # write files if everything is fine
-        file_bytes = await file.read()
-        
-        csv_name = f"{i}_{file.filename}"
+    logger.info(f"Accepted upload, scheduling ingestion job {job.job_id} for {len(files)} files")
+    
+    for i, (file_name, file_bytes) in enumerate(validated): # write files if everything is fine
+        csv_name = f"{i}_{file_name}"
         path = file_dir / csv_name
         
         path.write_bytes(file_bytes)
