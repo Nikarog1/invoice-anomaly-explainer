@@ -108,16 +108,17 @@ async def get_anomaly_report(invoice_id: UUID, session: Session = Depends(get_se
 
 @router.post("", status_code=202)
 async def upload_file(files: list[UploadFile], session: Session = Depends(get_session)) -> IngestionJobCreated:
-    """Some doc string"""
-    
-    job = IngestionJob(file_results=[]) 
-    file_dir = Path(settings.csv_dir / str(job.job_id))
-    file_dir.mkdir(parents=True, exist_ok=True)
-    paths = []
+    """
+    Upload one or more CSV files for ingestion.
 
-    for i, file in enumerate(files):
+    Validates files synchronously, persists them under data/uploads/{job_id}/,
+    creates an ingestion job in queued state, and fires the background ingestion
+    task. Returns immediately with the job id for status polling.
+    """
+
+    for file in files: # check files first
         if not file.filename:
-            raise 
+            raise InvalidCSVError("unnamed file")
         
         file_bytes = await file.read()
         
@@ -126,12 +127,20 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
         
         if not CSVParser.is_csv(file_bytes):
             raise InvalidCSVError(file.filename)
+    
+
+    job = IngestionJob(file_results=[]) 
+    file_dir = settings.csv_dir / str(job.job_id)
+    file_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    
+    for i, file in enumerate(files): # write files if everything is fine
+        file_bytes = await file.read()
         
         csv_name = f"{i}_{file.filename}"
-        path = file_dir / Path(csv_name)
+        path = file_dir / csv_name
         
-        with open(path, "wb") as f:
-            f.write(file_bytes)
+        path.write_bytes(file_bytes)
         paths.append(path)
             
     
