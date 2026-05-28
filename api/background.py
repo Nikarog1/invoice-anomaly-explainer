@@ -108,7 +108,11 @@ async def run_ingestion(job_id: UUID, file_paths: list[Path]) -> None:
 
 async def run_analysis(job_id: UUID) -> None:
     """
-    Run analysis for provided invoice_id, updating job status as it progresses.
+    Run the anomaly-detection pipeline for the job's invoice, updating job
+    status as it progresses.
+
+    On success, stores the produced report id and marks the job succeeded.
+    Any pipeline failure marks the entire job as failed.
     """
     with get_session() as session:
         job = session.get(AnalysisJob, job_id)
@@ -118,15 +122,31 @@ async def run_analysis(job_id: UUID) -> None:
 
         logger.info(f"Starting analysis job {job_id} for invoice {job.invoice_id}")  
         
-        job.status = "running"
-        job.started_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
-        session.commit()
+        try:
+            job.status = "running"
+            job.started_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+            session.commit()
 
-        try: 
             report = await run_pipeline(job.invoice_id)
+            
+            job.status = "succeeded"
+            job.anomaly_report_id = report.anomaly_report_id
+            job.finished_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+            
+            session.commit()
+            
+            logger.info(f"Job {job_id} finished: status={job.status}")
+            
 
         except Exception as e:
-            logger.exception(f"Job {job.job_id} crashed unexpectedly")
+            logger.exception(f"Job {job_id} crashed unexpectedly")
+            
+            session.rollback()
+            
+            job = session.get(AnalysisJob, job_id)
+            if not job:
+                logger.error(f"Job {job_id} not found")
+                return
             
             job.status = "failed"
             job.finished_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
