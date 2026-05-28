@@ -2,11 +2,11 @@ import asyncio
 import json
 from uuid import UUID
 
-from fastapi import Depends, APIRouter,  UploadFile
+from fastapi import Depends, APIRouter,  HTTPException, UploadFile
 from sqlmodel import Session
 
 from api.background import run_analysis, run_ingestion
-from api.models.analysis_jobs import AnalysisJobCreated
+from api.models.analysis_jobs import AnalysisJobCreated, AnalysisJobCreateRequest
 from api.models.ingestion_jobs import IngestionJobCreated
 from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
 from api.models.reports import AnomalyFlagDTO, AnomalyReportDTO, ReportResponse
@@ -160,10 +160,26 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
 
 
 @router.post("/{invoice_id}/analyze", status_code=202)
-async def analyze_invoice(invoice_id: UUID, session: Session = Depends(get_session)) -> AnalysisJobCreated:
+async def analyze_invoice(invoice_id: UUID, body: AnalysisJobCreateRequest, session: Session = Depends(get_session)) -> AnalysisJobCreated | dict:
     """
-    Analyze provided invoice.
+    Schedule anomaly analysis for an invoice.
+
+    Rejects the request if an analysis is already running, or if the invoice
+    was already analyzed and force is not set. Creates a queued job, fires the
+    background analysis task, and returns immediately with the job id for polling.
     """
+    if not invoice_exists(session, invoice_id):
+        raise InvoiceNotFoundError(invoice_id)
+    
+    latest_job = load_latest_analysis_job(session, invoice_id, None)
+    
+    if latest_job:
+        if latest_job.status in ["queued", "running"]:
+            raise HTTPException(status_code=409, detail="Analysis already in progress")
+        
+        if latest_job.status in ["succeeded", "failed"] and not body.force:
+            raise HTTPException(status_code=409, detail="Invoice already analyzed; pass force=true to re-run")
+        
     job = AnalysisJob(invoice_id=invoice_id)
     
     logger.info(f"Scheduling analysis job {job.job_id} for invoice {job.invoice_id}")
