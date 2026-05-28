@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import json
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4, UUID
 
 import pytest
@@ -228,3 +228,41 @@ def test_upload_files_returns_400_wrong_file_format(client) -> None:
         
     assert response.status_code == 400
     assert response.json()["detail"] == "Invalid csv format: data.txt"
+    
+
+
+def test_analyze_invoice_happy_path(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    invoice_id = invoice.invoice_id
+    
+    fake_session.add(invoice)
+    fake_session.commit()
+    
+    mock_analysis = AsyncMock()
+    mock_analysis.return_value = None
+    
+    with (
+        patch("api.routes.invoices.run_analysis", mock_analysis)
+    ):
+        response = client.post(
+            f"/invoices/{invoice_id}/analyze", 
+            json={"force": True}
+        )
+        
+    assert response.status_code == 202
+    
+    response_json = response.json()
+    assert isinstance(response_json["job_id"], str)
+    assert response_json["status"] == "queued"
+    
+
+def test_analyze_invoice_returns_404_when_invoice_missing(client, fake_session) -> None:
+    invoice_id = uuid4()
+    
+    response = client.post(
+        f"/invoices/{invoice_id}/analyze", 
+        json={"force": True}
+    )
+        
+    assert response.status_code == 404
+    assert response.json()["detail"] == f"Invoice {invoice_id} not found"
