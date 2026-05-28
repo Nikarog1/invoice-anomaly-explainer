@@ -9,7 +9,8 @@ from core.exceptions import (
 from core.logging import get_logger
 from data.sqlite import get_session
 from ingestion.service import IngestionService
-from schemas.jobs import IngestionJob
+from pipeline.service import run_pipeline
+from schemas.jobs import AnalysisJob, IngestionJob
 
 logger = get_logger(__name__)
 
@@ -95,6 +96,37 @@ async def run_ingestion(job_id: UUID, file_paths: list[Path]) -> None:
             if not job:
                 logger.error(f"Job {job_id} not found")
                 return
+            
+            job.status = "failed"
+            job.finished_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+            job.error_message = str(e)
+            
+            session.commit()
+            
+            logger.info(f"Job {job_id} finished: status={job.status}")
+            
+
+async def run_analysis(job_id: UUID) -> None:
+    """
+    Run analysis for provided invoice_id, updating job status as it progresses.
+    """
+    with get_session() as session:
+        job = session.get(AnalysisJob, job_id)
+        if not job:
+            logger.error(f"Job {job_id} not found")
+            return
+
+        logger.info(f"Starting analysis job {job_id} for invoice {job.invoice_id}")  
+        
+        job.status = "running"
+        job.started_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
+        session.commit()
+
+        try: 
+            report = await run_pipeline(job.invoice_id)
+
+        except Exception as e:
+            logger.exception(f"Job {job.job_id} crashed unexpectedly")
             
             job.status = "failed"
             job.finished_at = datetime.now(tz=timezone.utc).replace(tzinfo=None)
