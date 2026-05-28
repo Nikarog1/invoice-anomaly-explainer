@@ -5,7 +5,8 @@ from uuid import UUID
 from fastapi import Depends, APIRouter,  UploadFile
 from sqlmodel import Session
 
-from api.background import run_ingestion
+from api.background import run_analysis, run_ingestion
+from api.models.analysis_jobs import AnalysisJobCreated
 from api.models.ingestion_jobs import IngestionJobCreated
 from api.models.invoices import InvoiceDTO, InvoiceLineItemDTO
 from api.models.reports import AnomalyFlagDTO, AnomalyReportDTO, ReportResponse
@@ -17,7 +18,7 @@ from data.sqlite import (
 )
 from ingestion.csv_parser import CSVParser
 from schemas.anomaly import AnomalyReport
-from schemas.jobs import IngestionJob
+from schemas.jobs import AnalysisJob, IngestionJob
 
 logger = get_logger(__name__)
 
@@ -155,4 +156,21 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
         
     asyncio.create_task(run_ingestion(job.job_id, paths))
     
-    return IngestionJobCreated(job_id=job.job_id, status="queued")  
+    return IngestionJobCreated(job_id=job.job_id, status="queued")
+
+
+@router.post("/{invoice_id}/analyze", status_code=202)
+async def analyze_invoice(invoice_id: UUID, session: Session = Depends(get_session)) -> AnalysisJobCreated:
+    """
+    Analyze provided invoice.
+    """
+    job = AnalysisJob(invoice_id=invoice_id)
+    
+    logger.info(f"Scheduling analysis job {job.job_id} for invoice {job.invoice_id}")
+    
+    session.add(job)
+    session.commit()
+    
+    asyncio.create_task(run_analysis(job.job_id))
+    
+    return AnalysisJobCreated(job_id=job.job_id, invoice_id=invoice_id, status="queued")
