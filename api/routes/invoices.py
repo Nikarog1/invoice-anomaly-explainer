@@ -160,7 +160,7 @@ async def upload_file(files: list[UploadFile], session: Session = Depends(get_se
 
 
 @router.post("/{invoice_id}/analyze", status_code=202)
-async def analyze_invoice(invoice_id: UUID, body: AnalysisJobCreateRequest, session: Session = Depends(get_session)) -> AnalysisJobCreated | dict:
+async def analyze_invoice(invoice_id: UUID, body: AnalysisJobCreateRequest, session: Session = Depends(get_session)) -> AnalysisJobCreated:
     """
     Schedule anomaly analysis for an invoice.
 
@@ -174,10 +174,10 @@ async def analyze_invoice(invoice_id: UUID, body: AnalysisJobCreateRequest, sess
     latest_job = load_latest_analysis_job(session, invoice_id, None)
     
     if latest_job:
-        if latest_job.status in ["queued", "running"]:
+        if latest_job.status in ("queued", "running"):
             raise HTTPException(status_code=409, detail="Analysis already in progress")
         
-        if latest_job.status in ["succeeded", "failed"] and not body.force:
+        if latest_job.status in ("succeeded", "failed") and not body.force:
             raise HTTPException(status_code=409, detail="Invoice already analyzed; pass force=true to re-run")
         
     job = AnalysisJob(invoice_id=invoice_id)
