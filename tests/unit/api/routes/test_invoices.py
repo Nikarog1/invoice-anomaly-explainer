@@ -231,7 +231,7 @@ def test_upload_files_returns_400_wrong_file_format(client) -> None:
     
 
 
-def test_analyze_invoice_happy_path(client, fake_session) -> None:
+def test_analyze_invoice_happy_path_no_prior_job(client, fake_session) -> None:
     invoice, _ = _generate_invoice_with_lines()
     invoice_id = invoice.invoice_id
     
@@ -256,7 +256,7 @@ def test_analyze_invoice_happy_path(client, fake_session) -> None:
     assert response_json["status"] == "queued"
     
 
-def test_analyze_invoice_returns_404_when_invoice_missing(client, fake_session) -> None:
+def test_analyze_invoice_returns_404_when_invoice_missing(client) -> None:
     invoice_id = uuid4()
     
     response = client.post(
@@ -266,3 +266,78 @@ def test_analyze_invoice_returns_404_when_invoice_missing(client, fake_session) 
         
     assert response.status_code == 404
     assert response.json()["detail"] == f"Invoice {invoice_id} not found"
+    
+
+def test_analyze_invoice_returns_409_analysis_in_progress(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    invoice_id = invoice.invoice_id
+    job = _generate_analysis_job(invoice_id, "queued")
+    
+    fake_session.add(invoice)
+    fake_session.add(job)
+    fake_session.commit()
+    
+    mock_analysis = AsyncMock()
+    mock_analysis.return_value = None
+    
+    with (
+        patch("api.routes.invoices.run_analysis", mock_analysis)
+    ):
+        response = client.post(
+            f"/invoices/{invoice_id}/analyze", 
+            json={"force": True}
+        )
+        
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Analysis already in progress"
+    
+
+def test_analyze_invoice_returns_409_already_analyzed_no_force(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    invoice_id = invoice.invoice_id
+    job = _generate_analysis_job(invoice_id, "succeeded")
+    
+    fake_session.add(invoice)
+    fake_session.add(job)
+    fake_session.commit()
+    
+    mock_analysis = AsyncMock()
+    mock_analysis.return_value = None
+    
+    with (
+        patch("api.routes.invoices.run_analysis", mock_analysis)
+    ):
+        response = client.post(
+            f"/invoices/{invoice_id}/analyze", 
+            json={"force": False}
+        )
+        
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Invoice already analyzed; pass force=true to re-run"
+    
+
+def test_analyze_invoice_happy_path_w_prior_invoice_w_force(client, fake_session) -> None:
+    invoice, _ = _generate_invoice_with_lines()
+    invoice_id = invoice.invoice_id
+    job = _generate_analysis_job(invoice_id, "succeeded")
+    
+    fake_session.add(invoice)
+    fake_session.add(job)
+    fake_session.commit()
+    
+    mock_analysis = AsyncMock()
+    mock_analysis.return_value = None
+    
+    with (
+        patch("api.routes.invoices.run_analysis", mock_analysis)
+    ):
+        response = client.post(
+            f"/invoices/{invoice_id}/analyze", 
+            json={"force": True}
+        )
+        
+    assert response.status_code == 202
+    
+    response_json = response.json()
+    assert isinstance(response_json["job_id"], str)
+    assert response_json["status"] == "queued"
