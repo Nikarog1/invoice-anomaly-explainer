@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import json
+from unittest.mock import AsyncMock, Mock, patch
 from uuid import uuid4, UUID
 
 import pytest
@@ -186,3 +187,44 @@ def test_get_anomaly_report_happy_path(client, fake_session) -> None:
     assert flag_0["deviation"] is None
     assert len(flag_0["notes"]) == 2
     assert flag_0["notes"]["key1"] == 0.1
+    
+
+
+def test_upload_files_happy_path(client, tmp_path) -> None:
+    csv_1 = b"invoice_number,supplier_name\n012345,Company1\n"
+    csv_2 = b"invoice_number,supplier_name\n012346,Company1\n"
+    
+    mock_ingestion = AsyncMock()
+    mock_ingestion.return_value = None
+    
+    with (
+        patch("api.routes.invoices.run_ingestion", mock_ingestion),
+        patch("api.routes.invoices.settings.csv_dir", tmp_path)
+    ):
+        response = client.post(
+            f"/invoices", 
+            files=[
+                ("files", ("data_1.csv", csv_1, "text/csv")),
+                ("files", ("data_2.csv", csv_2, "text/csv")),
+            ]
+        )
+        
+    assert response.status_code == 202
+    
+    response_json = response.json()
+    assert isinstance(response_json["job_id"], str)
+    assert response_json["status"] == "queued"
+    
+
+def test_upload_files_returns_404_wrong_file_format(client) -> None:
+    txt = b"invoice_number,supplier_name\n012345,Company1\n"
+
+    response = client.post(
+        f"/invoices", 
+        files=[
+            ("files", ("data.txt", txt, "text/csv")),
+        ]
+    )
+        
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Invalid csv format: data.txt"
