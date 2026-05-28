@@ -216,7 +216,7 @@ def test_upload_files_happy_path(client, tmp_path) -> None:
     assert response_json["status"] == "queued"
     
 
-def test_upload_files_returns_404_wrong_file_format(client) -> None:
+def test_upload_files_returns_400_wrong_file_format(client) -> None:
     txt = b"invoice_number,supplier_name\n012345,Company1\n"
 
     response = client.post(
@@ -226,5 +226,5 @@ def test_upload_files_returns_404_wrong_file_format(client) -> None:
         ]
     )
         
-    assert response.status_code == 404
+    assert response.status_code == 400
     assert response.json()["detail"] == "Invalid csv format: data.txt"

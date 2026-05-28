@@ -21,7 +21,7 @@ def job_not_found_error_handler(request: Request, exc: JobNotFoundError):
 
 def invalid_csv_error_handler(request: Request, exc: InvalidCSVError):
     return JSONResponse(
-        status_code=404,
+        status_code=400,
         content={"detail": f"Invalid csv format: {exc.path}"},
     )
 
